@@ -81,6 +81,8 @@
     border-radius:999px; padding:9px 13px; font-size:13.5px; font-weight:600; cursor:pointer;
   }
   .chip.sel{background:rgba(245,165,36,.14); border-color:var(--amber); color:var(--amber2);}
+  #subdiv .chip{display:flex; align-items:center; padding:7px 9px;}
+  #subdiv .chip svg{display:block;}
   .hint{font-size:12px; color:var(--dim2); margin:10px 0 0; text-align:center;}
 
   /* ---- 퀵 BPM ---- */
@@ -290,7 +292,56 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const BPM_MIN=20, BPM_MAX=500;
-const SUBDIVS=[1,2,3,4,6];
+/* 서브디비전 리듬 패턴: slots = 박 안에서 클릭이 놓이는 위치(박의 분수, 0 = 정박).
+   silent0 = 첫 슬롯(정박)은 소리 없이 시각 표시만 (뒷박 패턴용). 모든 패턴은 slots[0]===0 이어야 한다. */
+const PATTERNS={
+  '1':{slots:[0]},
+  '2':{slots:[0,1/2]},
+  '3':{slots:[0,1/3,2/3]},
+  '4':{slots:[0,1/4,1/2,3/4]},
+  '6':{slots:[0,1/6,1/3,1/2,2/3,5/6]},
+  swing:{slots:[0,2/3]},
+  d8_16:{slots:[0,3/4]},
+  '8_16_16':{slots:[0,1/2,3/4]},
+  '16_16_8':{slots:[0,1/4,1/2]},
+  off8:{slots:[0,1/2],silent0:true}
+};
+const PATTERN_ORDER=['1','2','3','4','6','swing','d8_16','8_16_16','16_16_8','off8'];
+
+/* 서브디비전 칩용 음표 아이콘(SVG 문자열). n = 음표머리 x좌표, b2 = 16분 스텁 빔, dot = 점음표,
+   beam2 = 겹빔 전체, tup = 잇단음 숫자, rest = 8분쉼표, flag = 낱개 8분 꼬리 */
+const PATTERN_ICONS={
+  '1':{w:20,n:[{x:8}]},
+  '2':{w:32,n:[{x:6},{x:22}]},
+  '3':{w:38,n:[{x:6},{x:17},{x:28}],tup:'3'},
+  '4':{w:46,n:[{x:6},{x:16},{x:26},{x:36}],beam2:1},
+  '6':{w:56,n:[{x:6},{x:14},{x:22},{x:30},{x:38},{x:46}],beam2:1,tup:'6'},
+  swing:{w:36,n:[{x:6},{x:25}],tup:'3'},
+  d8_16:{w:38,n:[{x:6,dot:1},{x:27,b2:1}]},
+  '8_16_16':{w:40,n:[{x:6},{x:22,b2:1},{x:30,b2:1}]},
+  '16_16_8':{w:40,n:[{x:6,b2:1},{x:14,b2:1},{x:30}]},
+  off8:{w:32,n:[{x:19,flag:1}],rest:1}
+};
+function patternIcon(id){
+  const p=PATTERN_ICONS[id];if(!p)return'';
+  const top=7,ns=p.n;
+  let s='<svg viewBox="0 0 '+p.w+' 30" height="22" width="'+Math.round(p.w*22/30)+'" fill="currentColor" aria-hidden="true">';
+  ns.forEach(nt=>{
+    s+='<ellipse cx="'+nt.x+'" cy="24" rx="3.6" ry="2.7"/>'
+      +'<rect x="'+(nt.x+2.7)+'" y="'+top+'" width="1.5" height="'+(24-top)+'"/>';
+    if(nt.dot)s+='<circle cx="'+(nt.x+8)+'" cy="24" r="1.6"/>';
+    if(nt.flag)s+='<path d="M'+(nt.x+4.2)+' '+top+' q5.5 2.5 3.5 9.5" stroke="currentColor" stroke-width="1.7" fill="none"/>';
+  });
+  if(ns.length>1){
+    const x1=ns[0].x+2.7,x2=ns[ns.length-1].x+4.2;
+    s+='<rect x="'+x1+'" y="'+top+'" width="'+(x2-x1)+'" height="3"/>';
+    if(p.beam2)s+='<rect x="'+x1+'" y="'+(top+5)+'" width="'+(x2-x1)+'" height="2.4"/>';
+    ns.forEach(nt=>{if(nt.b2)s+='<rect x="'+(nt.x+4.2-8)+'" y="'+(top+5)+'" width="8" height="2.4"/>';});
+  }
+  if(p.rest)s+='<path d="M5 23 L11 9" stroke="currentColor" stroke-width="1.7"/><circle cx="11" cy="10" r="2.1"/>';
+  if(p.tup)s+='<text x="'+(p.w/2)+'" y="6" text-anchor="middle" font-size="7.5" font-weight="700">'+p.tup+'</text>';
+  return s+'</svg>';
+}
 
 /* ---------- 다국어 (모든 UI 문구는 여기에 ko/en 쌍으로 추가) ---------- */
 const I18N={
@@ -310,7 +361,7 @@ const I18N={
     quickHint:'+ 를 누르면 현재 BPM이 버튼으로 저장돼요 · × 로 삭제 · 끌어서 순서 변경 · 꾹 눌러 값 수정',
     quickAddAria:'현재 BPM을 퀵 버튼으로 저장',
     quickSetAria:v=>v+' BPM으로 설정',
-    subdivs:{1:'4분',2:'8분',3:'셋잇단',4:'16분',6:'6연음'},
+    subdivs:{1:'4분',2:'8분',3:'셋잇단',4:'16분',6:'6연음',swing:'스윙(셔플)',d8_16:'점8분+16분','8_16_16':'8분+16분 2개','16_16_8':'16분 2개+8분',off8:'뒷박(쉼표+8분)'},
     beatsUnit:n=>n+'박자', beatsShort:n=>n+'박',
     nextChange:(n,t)=>'다음 변경까지 '+n+'마디 → 목표 '+t+' BPM',
     trainerIdle:(ev,sg,st,tg)=>'재생하면 매 '+ev+'마디마다 '+sg+st+' BPM씩 목표 '+tg+'까지 변해요',
@@ -332,7 +383,7 @@ const I18N={
     quickHint:'+ saves the current BPM as a button · × removes it · drag to reorder · long-press to edit',
     quickAddAria:'Save current BPM as a quick button',
     quickSetAria:v=>'Set '+v+' BPM',
-    subdivs:{1:'Quarter',2:'8th',3:'Triplet',4:'16th',6:'Sextuplet'},
+    subdivs:{1:'Quarter',2:'8th',3:'Triplet',4:'16th',6:'Sextuplet',swing:'Swing (shuffle)',d8_16:'Dotted 8th + 16th','8_16_16':'8th + two 16ths','16_16_8':'Two 16ths + 8th',off8:'Offbeat (rest + 8th)'},
     beatsUnit:n=>n+' beats', beatsShort:n=>n+' beats',
     nextChange:(n,t)=>'Next change in '+n+' bar'+(n===1?'':'s')+' → target '+t+' BPM',
     trainerIdle:(ev,sg,st,tg)=>'While playing: '+sg+st+' BPM every '+ev+' bar'+(ev===1?'':'s')+' until '+tg+' BPM',
@@ -347,7 +398,7 @@ catch(e){const m=new Map();return{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v
 
 /* ---------- 상태 ---------- */
 const state={
-  bpm:120, beats:4, subdiv:1, accents:[2,1,1,1],
+  bpm:120, beats:4, subdiv:'1', accents:[2,1,1,1],
   volume:.8, keepAwake:true, playing:false, quickBpms:[],
   lang:(navigator.language||'en').toLowerCase().startsWith('ko')?'ko':'en',
   trainer:{on:false, every:4, step:5, target:160}
@@ -374,7 +425,7 @@ function restore(){
     if(s){
       state.bpm=clamp(Math.round(+s.bpm)||120,BPM_MIN,BPM_MAX);
       state.beats=clamp(Math.round(+s.beats)||4,1,12);
-      state.subdiv=[1,2,3,4,6].includes(+s.subdiv)?+s.subdiv:1;
+      state.subdiv=PATTERNS[s.subdiv]?String(s.subdiv):'1';
       state.accents=Array.isArray(s.accents)?s.accents.map(a=>[0,1,2].includes(+a)?+a:1):[2,1,1,1];
       state.volume=Number.isFinite(+s.volume)?clamp(+s.volume,0,1):.8;
       state.keepAwake=s.keepAwake!==false;
@@ -482,11 +533,14 @@ function schedulerTick(){
 }
 
 function scheduleNote(t){
+  const pat=PATTERNS[state.subdiv]||PATTERNS['1'];
   let buf=null,g=1;
   if(pos.sub===0){
-    const a=state.accents[pos.beat]??1;
-    if(a===2){buf=buffers.accent;g=1;}
-    else if(a===1){buf=buffers.beat;g=.8;}
+    if(!pat.silent0){
+      const a=state.accents[pos.beat]??1;
+      if(a===2){buf=buffers.accent;g=1;}
+      else if(a===1){buf=buffers.beat;g=.8;}
+    }
   }else{buf=buffers.sub;g=.45;}
   if(buf){
     const s=ctx.createBufferSource();s.buffer=buf;
@@ -501,9 +555,11 @@ function scheduleNote(t){
 }
 
 function advance(){
-  nextTime+=60/state.bpm/state.subdiv;
-  pos.sub++;
-  if(pos.sub>=state.subdiv){
+  const slots=(PATTERNS[state.subdiv]||PATTERNS['1']).slots;
+  const si=Math.min(pos.sub,slots.length-1);  /* 재생 중 패턴 변경 시 범위 밖 인덱스 보호 */
+  nextTime+=((si+1<slots.length?slots[si+1]:1)-slots[si])*60/state.bpm;
+  pos.sub=si+1;
+  if(pos.sub>=slots.length){
     pos.sub=0;pos.beat++;
     if(pos.beat>=state.beats){pos.beat=0;pos.bar++;onBar();}
   }
@@ -756,15 +812,15 @@ function setBeats(n){
   persist();metaThrottle();
 }
 function renderSubdiv(){
-  $$('#subdiv .chip').forEach(ch=>ch.classList.toggle('sel',+ch.dataset.v===state.subdiv));
+  $$('#subdiv .chip').forEach(ch=>ch.classList.toggle('sel',ch.dataset.v===String(state.subdiv)));
 }
-function subdivLabel(v){const d=T().subdivs;return d[+v]||d[1];}
+function subdivLabel(v){const d=T().subdivs;return d[v]||d['1'];}
 
 function applyLang(){
   document.documentElement.lang=state.lang;
   $$('[data-i18n]').forEach(el=>{el.textContent=T()[el.dataset.i18n];});
   $$('[data-i18n-ph]').forEach(el=>{el.placeholder=T()[el.dataset.i18nPh];});
-  $$('#subdiv .chip').forEach(ch=>{ch.textContent=T().subdivs[ch.dataset.v];});
+  $$('#subdiv .chip').forEach(ch=>{ch.title=T().subdivs[ch.dataset.v];ch.setAttribute('aria-label',T().subdivs[ch.dataset.v]);});
   $$('.chip[data-lang]').forEach(ch=>ch.classList.toggle('sel',ch.dataset.lang===state.lang));
   $('#vol').setAttribute('aria-label',T().volume);
   renderPlay();renderDots();renderPresets();renderQuick();renderTrainerInfo();updateMeta();
@@ -796,7 +852,7 @@ function snapshot(name){return{name,bpm:state.bpm,beats:state.beats,subdiv:state
 function applyPreset(p){
   setBpm(p.bpm);
   setBeats(Math.round(+p.beats)||4);
-  state.subdiv=[1,2,3,4,6].includes(+p.subdiv)?+p.subdiv:1;
+  state.subdiv=PATTERNS[p.subdiv]?String(p.subdiv):'1';
   renderSubdiv();
   if(Array.isArray(p.accents)){state.accents=p.accents.map(a=>[0,1,2].includes(+a)?+a:1);fixAccents();renderDots();}
   if(p.trainer)state.trainer={on:!!p.trainer.on,
@@ -898,10 +954,12 @@ $('#quick-edit-in').addEventListener('keydown',e=>{
 });
 
 const sd=$('#subdiv');
-SUBDIVS.forEach(v=>{
+PATTERN_ORDER.forEach(id=>{
   const b=document.createElement('button');
-  b.type='button';b.className='chip';b.dataset.v=v;b.textContent=T().subdivs[v];
-  b.addEventListener('click',()=>{state.subdiv=v;renderSubdiv();persist();});
+  b.type='button';b.className='chip';b.dataset.v=id;
+  b.innerHTML=patternIcon(id);
+  b.title=T().subdivs[id];b.setAttribute('aria-label',T().subdivs[id]);
+  b.addEventListener('click',()=>{state.subdiv=id;renderSubdiv();persist();});
   sd.appendChild(b);
 });
 $$('.chip[data-lang]').forEach(b=>b.addEventListener('click',()=>setLang(b.dataset.lang)));

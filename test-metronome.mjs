@@ -46,6 +46,17 @@ const d2 = last.slice(1).map((t, i) => t - last[i]);
 const exp2 = 60 / dbg.bpm / 4;
 const err2 = Math.max(...d2.map(d => Math.abs(d - exp2)));
 check('서브디비전 16분 전환', err2 < 0.0001, `expected=${exp2} maxErr=${err2.toExponential(2)}`);
+
+// --- 2b. 리듬 패턴 (점8분+16분 → 120 BPM에서 0.375/0.125 교대) ---
+await page.click('#subdiv .chip[data-v="d8_16"]');
+await page.waitForTimeout(2600);
+dbg = await page.evaluate(() => ({ times: window.__dm.times }));
+const lastP = dbg.times.slice(-7);
+const dP = lastP.slice(1).map((t, i) => t - lastP[i]);
+const okVals = dP.every(d => Math.abs(d - 0.375) < 0.0002 || Math.abs(d - 0.125) < 0.0002);
+const okAlt = dP.slice(1).every((d, i) => Math.abs(d + dP[i] - 0.5) < 0.0004);
+check('리듬 패턴 점8분+16분', dP.length >= 5 && okVals && okAlt,
+  `diffs=[${dP.map(d => d.toFixed(3)).join(',')}]`);
 await page.click('#subdiv .chip[data-v="1"]');
 
 // --- 3. 정지 ---
