@@ -291,7 +291,7 @@
 <script id="app">
 'use strict';
 /* 배포할 때마다 이 버전만 올리면 됨 — 헤더에 표시되고 sw.js 캐시 버전으로도 전달된다 */
-const APP_VER='v10';
+const APP_VER='v11';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const BPM_MIN=20, BPM_MAX=500;
@@ -506,18 +506,19 @@ async function waitForClock(){
   while(ctx.currentTime===t0&&performance.now()-s<600)await new Promise(r=>setTimeout(r,25));
 }
 
-/* iOS의 <audio>(MediaStream) 출력은 시작 직후 밀린 구간을 몰아서 재생(따라잡기)한다.
-   그동안 클릭을 넣으면 연타음이 되므로, 요소 재생 속도가 실시간(≈1배속)으로 2회 연속
-   안정될 때까지 무음 상태로 대기(최대 2.5s). 백그라운드 재생 경로는 유지하기 위한 우회책. */
-async function waitForLiveEdge(){
-  if(!IS_IOS||routed!=='media'||!audioEl)return;
-  const s=performance.now();
-  let prev=audioEl.currentTime, stable=0;
-  while(performance.now()-s<2500&&stable<2){
+/* iOS는 resume() 직후 ctx.currentTime이 한동안 실시간보다 빨리 질주하다 안정된다.
+   질주 중 클릭을 예약하면 재동기화 가드가 매 틱 발동해 연타음이 되므로,
+   클록 진행 속도가 실시간(0.8~1.2배)으로 2회 연속 안정될 때까지 대기(최대 3s). */
+async function waitForSteadyClock(){
+  if(!IS_IOS)return;
+  let prevC=ctx.currentTime, prevW=performance.now(), stable=0;
+  const s=prevW;
+  while(performance.now()-s<3000&&stable<2){
     await new Promise(r=>setTimeout(r,200));
-    const cur=audioEl.currentTime, rate=(cur-prev)/.2;
-    prev=cur;
-    if(rate>0&&rate<1.4)stable++;else stable=0;
+    const c=ctx.currentTime, w=performance.now();
+    const rate=(c-prevC)/((w-prevW)/1000);
+    prevC=c; prevW=w;
+    if(rate>.8&&rate<1.2)stable++;else stable=0;
   }
 }
 
@@ -547,13 +548,18 @@ function makeTicker(){
 
 /* ---------- 스케줄러 ---------- */
 const LOOKAHEAD=.18;
-let nextTime=0, pos={bar:0,beat:0,sub:0}, barsSince=0, queue=[];
+let nextTime=0, pos={bar:0,beat:0,sub:0}, barsSince=0, queue=[], lastResync=0;
 const dbgTimes=[];
 
 function schedulerTick(){
   if(!state.playing||!ctx)return;
   const now=ctx.currentTime;
-  if(nextTime<now-.12){nextTime=now+.05;}  /* 탭 동결 후 복귀 시 재동기화(연타 방지) */
+  if(nextTime<now-.12){  /* 탭 동결 후 복귀 시 재동기화(연타 방지) */
+    const w=performance.now(), burst=w-lastResync<400;
+    lastResync=w;
+    nextTime=now+.05;
+    if(burst)return;  /* 가드가 연속 발동 = 클록이 실시간보다 빨리 질주 중(iOS) — 예약 생략해 연타 봉쇄 */
+  }
   while(nextTime<now+LOOKAHEAD){scheduleNote(nextTime);advance();}
 }
 
@@ -616,7 +622,7 @@ async function togglePlay(force){
     initAudio();
     state.playing=true;
     await ensureRoute();
-    if(!warmedUp){await waitForClock();await waitForLiveEdge();}
+    if(!warmedUp){await waitForClock();await waitForSteadyClock();}
     if(!state.playing)return;  /* 예열 대기 중 정지를 눌렀으면 시작하지 않음 */
     pos={bar:0,beat:0,sub:0};barsSince=0;queue.length=0;
     nextTime=ctx.currentTime+(warmedUp?.1:.35);  /* 첫 재생은 세션 예열 뒤로 밀어 클릭 뭉침 방지 */
