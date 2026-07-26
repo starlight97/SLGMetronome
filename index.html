@@ -291,7 +291,7 @@
 <script id="app">
 'use strict';
 /* 배포할 때마다 이 버전만 올리면 됨 — 헤더에 표시되고 sw.js 캐시 버전으로도 전달된다 */
-const APP_VER='v11';
+const APP_VER='v12';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const BPM_MIN=20, BPM_MAX=500;
@@ -1031,6 +1031,14 @@ window.__dm={
 <script>
 if('serviceWorker' in navigator && (location.protocol==='https:'||['localhost','127.0.0.1'].includes(location.hostname))){
   addEventListener('load',()=>{navigator.serviceWorker.register('./sw.js?v='+APP_VER).catch(()=>{});});
+}
+/* 방문 통계 (GoatCounter) — 앱 시작 시 1회 핑.
+   오프라인이면 이미지 로드가 조용히 실패할 뿐 앱에 영향 없음.
+   로컬 실행/자동화 테스트(Playwright는 navigator.webdriver=true)는 집계에서 제외. */
+if(!navigator.webdriver && !['localhost','127.0.0.1',''].includes(location.hostname)){
+  new Image().src='https://slgarden.goatcounter.com/count'
+    +'?p='+encodeURIComponent(location.pathname)
+    +'&rnd='+Date.now();
 }
 </script>
 </body>
