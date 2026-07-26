@@ -32,6 +32,7 @@
 
   header{display:flex; align-items:baseline; justify-content:space-between; padding:2px 2px 10px;}
   header h1{font-size:16px; font-weight:700; margin:0; letter-spacing:.02em;}
+  .ver{font-size:11px; font-weight:600; color:var(--dim2); letter-spacing:0;}
   .bar-counter{font-size:13px; color:var(--dim);}
   .bar-counter b{color:var(--txt); font-variant-numeric:tabular-nums; font-size:15px;}
 
@@ -181,7 +182,7 @@
 <body>
 
 <header>
-  <h1>SLGMetronome</h1>
+  <h1>SLGMetronome <span class="ver" id="app-ver"></span></h1>
   <div class="bar-counter"><span data-i18n="bar">Bar</span> <b id="bar-num">–</b></div>
 </header>
 
@@ -289,9 +290,12 @@
 
 <script id="app">
 'use strict';
+/* 배포할 때마다 이 버전만 올리면 됨 — 헤더에 표시되고 sw.js 캐시 버전으로도 전달된다 */
+const APP_VER='v10';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const BPM_MIN=20, BPM_MAX=500;
+const IS_IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 /* 서브디비전 리듬 패턴: slots = 박 안에서 클릭이 놓이는 위치(박의 분수, 0 = 정박).
    silent0 = 첫 슬롯(정박)은 소리 없이 시각 표시만 (뒷박 패턴용). 모든 패턴은 slots[0]===0 이어야 한다. */
 const PATTERNS={
@@ -502,6 +506,21 @@ async function waitForClock(){
   while(ctx.currentTime===t0&&performance.now()-s<600)await new Promise(r=>setTimeout(r,25));
 }
 
+/* iOS의 <audio>(MediaStream) 출력은 시작 직후 밀린 구간을 몰아서 재생(따라잡기)한다.
+   그동안 클릭을 넣으면 연타음이 되므로, 요소 재생 속도가 실시간(≈1배속)으로 2회 연속
+   안정될 때까지 무음 상태로 대기(최대 2.5s). 백그라운드 재생 경로는 유지하기 위한 우회책. */
+async function waitForLiveEdge(){
+  if(!IS_IOS||routed!=='media'||!audioEl)return;
+  const s=performance.now();
+  let prev=audioEl.currentTime, stable=0;
+  while(performance.now()-s<2500&&stable<2){
+    await new Promise(r=>setTimeout(r,200));
+    const cur=audioEl.currentTime, rate=(cur-prev)/.2;
+    prev=cur;
+    if(rate>0&&rate<1.4)stable++;else stable=0;
+  }
+}
+
 function updateMeta(){
   if(!('mediaSession' in navigator))return;
   try{
@@ -597,7 +616,7 @@ async function togglePlay(force){
     initAudio();
     state.playing=true;
     await ensureRoute();
-    if(!warmedUp)await waitForClock();
+    if(!warmedUp){await waitForClock();await waitForLiveEdge();}
     if(!state.playing)return;  /* 예열 대기 중 정지를 눌렀으면 시작하지 않음 */
     pos={bar:0,beat:0,sub:0};barsSince=0;queue.length=0;
     nextTime=ctx.currentTime+(warmedUp?.1:.35);  /* 첫 재생은 세션 예열 뒤로 밀어 클릭 뭉침 방지 */
@@ -990,6 +1009,7 @@ $('#bpm-range').value=state.bpm;
 $('#beats-num').textContent=state.beats;
 $('#vol').value=Math.round(state.volume*100);
 $('#awake').checked=state.keepAwake;
+$('#app-ver').textContent=APP_VER;
 renderDots();renderSubdiv();renderQuick();syncTrainerUI();renderPresets();renderPlay();applyLang();
 requestAnimationFrame(frame);
 
@@ -1004,7 +1024,7 @@ window.__dm={
 </script>
 <script>
 if('serviceWorker' in navigator && (location.protocol==='https:'||['localhost','127.0.0.1'].includes(location.hostname))){
-  addEventListener('load',()=>{navigator.serviceWorker.register('./sw.js').catch(()=>{});});
+  addEventListener('load',()=>{navigator.serviceWorker.register('./sw.js?v='+APP_VER).catch(()=>{});});
 }
 </script>
 </body>

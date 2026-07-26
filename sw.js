@@ -1,6 +1,6 @@
 /* SLGMetronome 서비스 워커 — 오프라인 캐시 (stale-while-revalidate)
-   업데이트를 강제로 확실하게 밀고 싶으면 아래 버전 문자열을 올리면 됨. */
-const CACHE = 'slg-metronome-v9';
+   버전은 index.html의 APP_VER가 등록 URL 쿼리(?v=...)로 전달한다 — 이 파일은 배포 시 건드릴 필요 없음. */
+const CACHE = 'slg-metronome-' + (new URL(self.location.href).searchParams.get('v') || 'v0');
 const ASSETS = [
   './',
   './index.html',
