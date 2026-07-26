@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="드러머를 위한 개인용 메트로놈 — 백그라운드 재생, 강세 설정, 서브디비전, 프리셋, 템포 트레이너">
+<title>SLGMetronome</title>
+<style>
+  :root{
+    --bg:#0b0d10; --card:#14171d; --card2:#10131a; --line:#242a33;
+    --txt:#e9ecf1; --dim:#8b94a1; --dim2:#5b6470;
+    --amber:#f5a524; --amber2:#ffce6b; --red:#e5484d;
+    --glow:rgba(245,165,36,.45);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0;}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans KR',sans-serif;
+    max-width:560px; margin:0 auto;
+    padding:14px 16px calc(118px + env(safe-area-inset-bottom));
+    touch-action:manipulation;
+    -webkit-user-select:none; user-select:none;
+  }
+  input,button{font-family:inherit;}
+  input{-webkit-user-select:auto; user-select:auto;}
+
+  header{display:flex; align-items:baseline; justify-content:space-between; padding:2px 2px 10px;}
+  header h1{font-size:16px; font-weight:700; margin:0; letter-spacing:.02em;}
+  .bar-counter{font-size:13px; color:var(--dim);}
+  .bar-counter b{color:var(--txt); font-variant-numeric:tabular-nums; font-size:15px;}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:12px;}
+  .card h2{font-size:12px; font-weight:600; color:var(--dim); margin:0 0 12px; letter-spacing:.08em;}
+
+  /* ---- BPM ---- */
+  .bpm-wrap{text-align:center;}
+  .bpm-num{
+    font-size:clamp(64px,19vw,92px); font-weight:800; line-height:1;
+    font-variant-numeric:tabular-nums; letter-spacing:-.02em;
+  }
+  .bpm-label{font-size:12px; color:var(--dim); letter-spacing:.35em; margin:2px 0 14px;}
+  .bpm-btns{display:grid; grid-template-columns:1fr 1fr 1.4fr 1fr 1fr; gap:8px; margin-bottom:12px;}
+  .btn{
+    background:#1c212a; border:1px solid var(--line); color:var(--txt);
+    border-radius:12px; padding:13px 0; font-size:16px; font-weight:600;
+    cursor:pointer; transition:transform .06s ease, background .12s ease;
+  }
+  .btn:active{transform:scale(.95); background:#252c38;}
+  .btn-tap{border-color:var(--amber); color:var(--amber); font-weight:800; letter-spacing:.05em;}
+  .btn-tap.flash{background:var(--amber); color:#191204;}
+  input[type=range]{width:100%; accent-color:var(--amber); height:28px; margin:0; cursor:pointer;}
+
+  /* ---- 리듬 ---- */
+  .dots{display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-bottom:14px; min-height:38px;}
+  .dot{
+    width:36px; height:36px; border-radius:50%; border:2px solid var(--dim2);
+    background:transparent; cursor:pointer; padding:0;
+    transition:background .1s ease, border-color .1s ease;
+  }
+  .dot.l1{background:#39414d; border-color:#39414d;}
+  .dot.l2{background:var(--amber); border-color:var(--amber2);}
+  .dot.l0{border-style:dashed; opacity:.55;}
+  .dot.on{box-shadow:0 0 0 3px rgba(245,165,36,.28);}
+  .dot.pulse{animation:pulse .16s ease-out;}
+  @keyframes pulse{0%{transform:scale(1.4);} 100%{transform:scale(1);}}
+  .rhythm-rows{display:flex; flex-direction:column; gap:12px;}
+  .row{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .row-label{font-size:14px; color:var(--dim); min-width:64px;}
+  .stepper{display:flex; align-items:center; gap:2px; background:var(--card2); border:1px solid var(--line); border-radius:12px;}
+  .stepper .btn{border:none; background:transparent; width:44px; padding:11px 0; font-size:18px;}
+  .stepper b{min-width:34px; text-align:center; font-size:17px; font-variant-numeric:tabular-nums;}
+  .chips{display:flex; gap:6px; flex-wrap:wrap;}
+  .chip{
+    background:var(--card2); border:1px solid var(--line); color:var(--dim);
+    border-radius:999px; padding:9px 13px; font-size:13.5px; font-weight:600; cursor:pointer;
+  }
+  .chip.sel{background:rgba(245,165,36,.14); border-color:var(--amber); color:var(--amber2);}
+  .hint{font-size:12px; color:var(--dim2); margin:10px 0 0; text-align:center;}
+
+  /* ---- 트레이너 ---- */
+  .trainer-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;}
+  .trainer-head h2{margin:0;}
+  .switch{position:relative; width:46px; height:26px; flex:none;}
+  .switch input{position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer; z-index:2;}
+  .switch i{
+    position:absolute; inset:0; background:#2a313c; border-radius:999px; transition:background .15s;
+  }
+  .switch i::after{
+    content:""; position:absolute; top:3px; left:3px; width:20px; height:20px;
+    background:#fff; border-radius:50%; transition:transform .15s;
+  }
+  .switch input:checked + i{background:var(--amber);}
+  .switch input:checked + i::after{transform:translateX(20px);}
+  .trainer-body{display:none; margin-top:12px;}
+  .card.on .trainer-body{display:block;}
+  .trainer-fields{display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:14.5px; color:var(--txt);}
+  .num-in{
+    width:60px; background:var(--card2); border:1px solid var(--line); color:var(--txt);
+    border-radius:10px; padding:9px 4px; font-size:16px; text-align:center;
+  }
+  .num-in:focus{outline:none; border-color:var(--amber);}
+  .trainer-info{font-size:13px; color:var(--amber2); margin:10px 0 0; min-height:16px;}
+
+  /* ---- 프리셋 ---- */
+  .preset-form{display:flex; gap:8px; margin-bottom:10px;}
+  .preset-form input[type=text]{
+    flex:1; background:var(--card2); border:1px solid var(--line); color:var(--txt);
+    border-radius:12px; padding:11px 12px; font-size:15px; min-width:0;
+  }
+  .preset-form input[type=text]:focus{outline:none; border-color:var(--amber);}
+  .preset-form .btn{padding:11px 18px; flex:none;}
+  .preset-list{display:flex; flex-direction:column; gap:8px;}
+  .preset{display:flex; gap:8px;}
+  .preset-load{
+    flex:1; display:flex; flex-direction:column; gap:3px; align-items:flex-start; text-align:left;
+    background:var(--card2); border:1px solid var(--line); color:var(--txt);
+    border-radius:12px; padding:10px 12px; cursor:pointer; min-width:0;
+  }
+  .preset-load:active{background:#252c38;}
+  .preset-load b{font-size:14.5px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .preset-load span{font-size:12px; color:var(--dim);}
+  .preset-del{
+    flex:none; width:42px; background:var(--card2); border:1px solid var(--line); color:var(--dim);
+    border-radius:12px; font-size:18px; cursor:pointer;
+  }
+  .preset-del:active{color:var(--red); border-color:var(--red);}
+  .empty{font-size:13px; color:var(--dim2); text-align:center; margin:4px 0;}
+
+  /* ---- 하단 ---- */
+  .foot-row{display:flex; align-items:center; gap:12px;}
+  .foot-row + .foot-row{margin-top:12px;}
+  .foot-label{font-size:13.5px; color:var(--dim); flex:none; min-width:64px;}
+  .awake-row label{display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--dim); cursor:pointer;}
+  .note{font-size:12px; color:var(--dim2); margin:12px 2px 0; line-height:1.5;}
+  .kbd-hint{display:none; font-size:12px; color:var(--dim2); text-align:center; margin:14px 0 0;}
+  @media (hover:hover) and (pointer:fine){ .kbd-hint{display:block;} }
+
+  .play-btn{
+    position:fixed; bottom:calc(16px + env(safe-area-inset-bottom));
+    left:50%; transform:translateX(-50%);
+    width:min(92%,528px); height:62px;
+    border:none; border-radius:18px;
+    background:var(--amber); color:#191204;
+    font-size:20px; font-weight:800; letter-spacing:.1em; cursor:pointer;
+    box-shadow:0 6px 24px rgba(245,165,36,.3);
+    transition:background .15s ease;
+    z-index:10;
+  }
+  .play-btn:active{transform:translateX(-50%) scale(.98);}
+  .play-btn.playing{background:#2a313c; color:var(--txt); box-shadow:none;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>SLGMetronome</h1>
+  <div class="bar-counter">마디 <b id="bar-num">–</b></div>
+</header>
+
+<section class="card bpm-wrap">
+  <div class="bpm-num" id="bpm-num">120</div>
+  <div class="bpm-label">BPM</div>
+  <div class="bpm-btns">
+    <button type="button" class="btn" id="bpm-m5">−5</button>
+    <button type="button" class="btn" id="bpm-m1">−1</button>
+    <button type="button" class="btn btn-tap" id="tap">TAP</button>
+    <button type="button" class="btn" id="bpm-p1">+1</button>
+    <button type="button" class="btn" id="bpm-p5">+5</button>
+  </div>
+  <input type="range" id="bpm-range" min="20" max="300" step="1" value="120" aria-label="BPM">
+</section>
+
+<section class="card">
+  <h2>리듬</h2>
+  <div class="dots" id="dots"></div>
+  <div class="rhythm-rows">
+    <div class="row">
+      <span class="row-label">박자</span>
+      <div class="stepper">
+        <button type="button" class="btn" id="beats-minus">−</button>
+        <b id="beats-num">4</b>
+        <button type="button" class="btn" id="beats-plus">+</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="row-label">서브디비전</span>
+      <div class="chips" id="subdiv"></div>
+    </div>
+  </div>
+  <p class="hint">동그라미를 누르면 박마다 강세를 바꿀 수 있어요 (강 · 중 · 무음)</p>
+</section>
+
+<section class="card" id="trainer-card">
+  <div class="trainer-head">
+    <h2>템포 트레이너</h2>
+    <span class="switch"><input type="checkbox" id="tr-on"><i></i></span>
+  </div>
+  <div class="trainer-body">
+    <div class="trainer-fields">
+      매 <input type="number" class="num-in" id="tr-every" min="1" max="64" value="4" inputmode="numeric"> 마디마다
+      <input type="number" class="num-in" id="tr-step" min="1" max="50" value="5" inputmode="numeric"> BPM씩 → 목표
+      <input type="number" class="num-in" id="tr-target" min="20" max="300" value="160" inputmode="numeric"> BPM
+    </div>
+    <p class="trainer-info" id="trainer-info"></p>
+  </div>
+</section>
+
+<section class="card">
+  <h2>프리셋</h2>
+  <div class="preset-form">
+    <input type="text" id="preset-name" placeholder="이름 (예: 곡 제목)" maxlength="40">
+    <button type="button" class="btn" id="preset-save">저장</button>
+  </div>
+  <div class="preset-list" id="preset-list"></div>
+</section>
+
+<section class="card">
+  <div class="foot-row">
+    <span class="foot-label">음량</span>
+    <input type="range" id="vol" min="0" max="100" step="1" value="80" aria-label="음량">
+  </div>
+  <div class="foot-row awake-row">
+    <label><span class="switch"><input type="checkbox" id="awake" checked><i></i></span> 재생 중 화면 꺼짐 방지</label>
+  </div>
+  <p class="note">재생 중에는 다른 앱으로 전환해도 소리가 유지돼요. 미디어 알림에서 재생/정지를 제어할 수 있어요.</p>
+  <p class="kbd-hint">Space 시작/정지 · ↑↓ ±1 BPM · ←→ ±5 BPM · T 탭 템포</p>
+</section>
+
+<button type="button" class="play-btn" id="play">시작</button>
+<audio id="audio-out" playsinline style="display:none"></audio>
+
+<script id="app">
+'use strict';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const BPM_MIN=20, BPM_MAX=300;
+const SUBDIVS=[{v:1,label:'4분'},{v:2,label:'8분'},{v:3,label:'셋잇단'},{v:4,label:'16분'},{v:6,label:'6연음'}];
+
+/* ---------- 저장소 (localStorage 불가 환경에서는 메모리로 폴백) ---------- */
+const store=(()=>{try{const k='__dm_t';localStorage.setItem(k,'1');localStorage.removeItem(k);return localStorage;}
+catch(e){const m=new Map();return{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>{m.set(k,String(v));},removeItem:k=>{m.delete(k);}};}})();
+
+/* ---------- 상태 ---------- */
+const state={
+  bpm:120, beats:4, subdiv:1, accents:[2,1,1,1],
+  volume:.8, keepAwake:true, playing:false,
+  trainer:{on:false, every:4, step:5, target:160}
+};
+let presets=[];
+
+function fixAccents(){const a=state.accents;while(a.length<state.beats)a.push(1);a.length=state.beats;}
+
+let saveT=null;
+function persist(){clearTimeout(saveT);saveT=setTimeout(()=>{try{store.setItem('dm.settings',JSON.stringify({
+  bpm:state.bpm,beats:state.beats,subdiv:state.subdiv,accents:state.accents,
+  volume:state.volume,keepAwake:state.keepAwake,trainer:state.trainer}));}catch(e){}},250);}
+
+function restore(){
+  try{
+    const s=JSON.parse(store.getItem('dm.settings')||'null');
+    if(s){
+      state.bpm=clamp(Math.round(+s.bpm)||120,BPM_MIN,BPM_MAX);
+      state.beats=clamp(Math.round(+s.beats)||4,1,12);
+      state.subdiv=[1,2,3,4,6].includes(+s.subdiv)?+s.subdiv:1;
+      state.accents=Array.isArray(s.accents)?s.accents.map(a=>[0,1,2].includes(+a)?+a:1):[2,1,1,1];
+      state.volume=Number.isFinite(+s.volume)?clamp(+s.volume,0,1):.8;
+      state.keepAwake=s.keepAwake!==false;
+      if(s.trainer)state.trainer={on:!!s.trainer.on,
+        every:clamp(Math.round(+s.trainer.every)||4,1,64),
+        step:clamp(Math.round(+s.trainer.step)||5,1,50),
+        target:clamp(Math.round(+s.trainer.target)||160,BPM_MIN,BPM_MAX)};
+    }
+  }catch(e){}
+  fixAccents();
+}
+function loadPresets(){try{presets=JSON.parse(store.getItem('dm.presets')||'[]');if(!Array.isArray(presets))presets=[];}catch(e){presets=[];}}
+function savePresets(){try{store.setItem('dm.presets',JSON.stringify(presets));}catch(e){}}
+
+/* ---------- 오디오 엔진 ---------- */
+let ctx=null, master=null, msDest=null, audioEl=null, routed='none';
+const buffers={};
+const activeSrcs=new Set();
+
+function makeClick(freq,dur,bright){
+  const sr=ctx.sampleRate, n=Math.max(32,Math.floor(sr*dur));
+  const buf=ctx.createBuffer(1,n,sr), d=buf.getChannelData(0), tau=dur/5;
+  for(let i=0;i<n;i++){
+    const t=i/sr, env=Math.exp(-t/tau), att=Math.min(1,t/0.0015);
+    let s=Math.sin(2*Math.PI*freq*t);
+    if(bright)s+=.45*Math.sin(2*Math.PI*freq*2.001*t)+.15*Math.sin(2*Math.PI*freq*3.02*t);
+    d[i]=s*env*att*.5;
+  }
+  return buf;
+}
+
+function initAudio(){
+  if(ctx)return;
+  const AC=window.AudioContext||window.webkitAudioContext;
+  ctx=new AC({latencyHint:'interactive'});
+  master=ctx.createGain();
+  master.gain.value=state.volume;
+  buffers.accent=makeClick(1760,.07,true);
+  buffers.beat=makeClick(1175,.055,true);
+  buffers.sub=makeClick(880,.04,false);
+  audioEl=$('#audio-out');
+  try{
+    msDest=ctx.createMediaStreamDestination();
+    master.connect(msDest);
+    audioEl.srcObject=msDest.stream;
+  }catch(e){msDest=null;}
+  if(!msDest){master.connect(ctx.destination);routed='direct';}
+  if('mediaSession' in navigator){
+    try{
+      navigator.mediaSession.setActionHandler('play',()=>{if(!state.playing)togglePlay();});
+      navigator.mediaSession.setActionHandler('pause',()=>{if(state.playing)togglePlay();});
+      navigator.mediaSession.setActionHandler('stop',()=>{if(state.playing)togglePlay();});
+    }catch(e){}
+  }
+}
+
+async function ensureRoute(){
+  try{await ctx.resume();}catch(e){}
+  if(!msDest||routed==='direct'){updateMeta();return;}
+  try{await audioEl.play();routed='media';}
+  catch(e){
+    try{master.disconnect();}catch(_){}
+    master.connect(ctx.destination);
+    routed='direct';
+  }
+  updateMeta();
+}
+
+function updateMeta(){
+  if(!('mediaSession' in navigator))return;
+  try{
+    navigator.mediaSession.metadata=new MediaMetadata({
+      title:state.bpm+' BPM · '+state.beats+'박자',
+      artist:'SLGMetronome'});
+    navigator.mediaSession.playbackState=state.playing?'playing':'paused';
+  }catch(e){}
+}
+let metaT=null;
+function metaThrottle(){clearTimeout(metaT);metaT=setTimeout(updateMeta,300);}
+
+/* ---------- 틱 소스 (워커, 실패 시 메인 스레드 폴백) ---------- */
+function makeTicker(){
+  try{
+    const src="let id=null;onmessage=e=>{if(e.data==='start'){clearInterval(id);id=setInterval(()=>postMessage(0),25)}else{clearInterval(id);id=null}}";
+    const w=new Worker(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));
+    return{start(){w.postMessage('start');},stop(){w.postMessage('stop');},bind(f){w.onmessage=f;}};
+  }catch(e){
+    let id=null,fn=null;
+    return{start(){clearInterval(id);id=setInterval(()=>fn&&fn(),25);},stop(){clearInterval(id);id=null;},bind(f){fn=f;}};
+  }
+}
+
+/* ---------- 스케줄러 ---------- */
+const LOOKAHEAD=.18;
+let nextTime=0, pos={bar:0,beat:0,sub:0}, barsSince=0, queue=[];
+const dbgTimes=[];
+
+function schedulerTick(){
+  if(!state.playing||!ctx)return;
+  const now=ctx.currentTime;
+  if(nextTime<now-.12){nextTime=now+.05;}  /* 탭 동결 후 복귀 시 재동기화(연타 방지) */
+  while(nextTime<now+LOOKAHEAD){scheduleNote(nextTime);advance();}
+}
+
+function scheduleNote(t){
+  let buf=null,g=1;
+  if(pos.sub===0){
+    const a=state.accents[pos.beat]??1;
+    if(a===2){buf=buffers.accent;g=1;}
+    else if(a===1){buf=buffers.beat;g=.8;}
+  }else{buf=buffers.sub;g=.45;}
+  if(buf){
+    const s=ctx.createBufferSource();s.buffer=buf;
+    const gn=ctx.createGain();gn.gain.value=g;
+    s.connect(gn);gn.connect(master);
+    try{s.start(t);}catch(e){}
+    activeSrcs.add(s);s.onended=()=>activeSrcs.delete(s);
+  }
+  queue.push({t,bar:pos.bar,beat:pos.beat,sub:pos.sub});
+  if(queue.length>400)queue.splice(0,queue.length-400);
+  dbgTimes.push(t);if(dbgTimes.length>300)dbgTimes.splice(0,100);
+}
+
+function advance(){
+  nextTime+=60/state.bpm/state.subdiv;
+  pos.sub++;
+  if(pos.sub>=state.subdiv){
+    pos.sub=0;pos.beat++;
+    if(pos.beat>=state.beats){pos.beat=0;pos.bar++;onBar();}
+  }
+}
+
+function onBar(){
+  if(!state.trainer.on)return;
+  barsSince++;
+  if(barsSince>=state.trainer.every){
+    barsSince=0;
+    const tr=state.trainer;
+    if(state.bpm!==tr.target){
+      const dir=tr.target>state.bpm?1:-1;
+      let nb=state.bpm+dir*tr.step;
+      nb=dir>0?Math.min(nb,tr.target):Math.max(nb,tr.target);
+      setBpm(nb,true);
+    }
+  }
+}
+
+const ticker=makeTicker();
+ticker.bind(schedulerTick);
+
+/* ---------- 재생/정지 ---------- */
+async function togglePlay(force){
+  const want=typeof force==='boolean'?force:!state.playing;
+  if(want===state.playing)return;
+  if(want){
+    initAudio();
+    state.playing=true;
+    await ensureRoute();
+    pos={bar:0,beat:0,sub:0};barsSince=0;queue.length=0;
+    nextTime=ctx.currentTime+.1;
+    ticker.start();
+    if(state.keepAwake)wakeOn();
+  }else{
+    state.playing=false;
+    ticker.stop();
+    activeSrcs.forEach(s=>{try{s.stop();}catch(e){}});
+    activeSrcs.clear();
+    queue.length=0;
+    if(audioEl){try{audioEl.pause();}catch(e){}}
+    wakeOff();
+    clearBeatVis();
+  }
+  updateMeta();renderPlay();renderTrainerInfo();
+}
+
+/* ---------- Wake Lock ---------- */
+let wl=null;
+async function wakeOn(){
+  if(!('wakeLock' in navigator))return;
+  try{wl=await navigator.wakeLock.request('screen');wl.addEventListener('release',()=>{wl=null;});}
+  catch(e){wl=null;}
+}
+function wakeOff(){try{wl&&wl.release();}catch(e){}wl=null;}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'){
+    if(state.playing&&state.keepAwake&&!wl)wakeOn();
+    if(ctx&&state.playing&&ctx.state==='suspended')ctx.resume().catch(()=>{});
+  }
+});
+
+/* ---------- 비주얼 ---------- */
+function frame(){
+  if(state.playing&&ctx){
+    const now=ctx.currentTime;
+    let ev=null;
+    while(queue.length&&queue[0].t<=now)ev=queue.shift();
+    if(ev)renderTick(ev);
+  }
+  requestAnimationFrame(frame);
+}
+function renderTick(ev){
+  $('#bar-num').textContent=ev.bar+1;
+  if(ev.sub===0){
+    const dots=$$('#dots .dot');
+    dots.forEach((d,i)=>d.classList.toggle('on',i===ev.beat));
+    const d=dots[ev.beat];
+    if(d){d.classList.remove('pulse');void d.offsetWidth;d.classList.add('pulse');}
+    if(state.trainer.on)renderTrainerInfo();
+  }
+}
+function clearBeatVis(){
+  $$('#dots .dot').forEach(d=>d.classList.remove('on','pulse'));
+  $('#bar-num').textContent='–';
+}
+
+/* ---------- BPM ---------- */
+function setBpm(v,fromTrainer){
+  state.bpm=clamp(Math.round(v),BPM_MIN,BPM_MAX);
+  $('#bpm-num').textContent=state.bpm;
+  $('#bpm-range').value=state.bpm;
+  persist();metaThrottle();
+  if(!fromTrainer)renderTrainerInfo();
+}
+
+/* ---------- 볼륨 ---------- */
+function setVolume(v){
+  state.volume=clamp(v,0,1);
+  if(master&&ctx)master.gain.setTargetAtTime(state.volume,ctx.currentTime,.02);
+  persist();
+}
+
+/* ---------- 렌더링 ---------- */
+function renderPlay(){
+  const b=$('#play');
+  b.textContent=state.playing?'정지':'시작';
+  b.classList.toggle('playing',state.playing);
+}
+function renderDots(){
+  const c=$('#dots');c.innerHTML='';
+  for(let i=0;i<state.beats;i++){
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='dot l'+(state.accents[i]??1);
+    b.setAttribute('aria-label',(i+1)+'번째 박 강세');
+    b.addEventListener('click',()=>{
+      state.accents[i]=((state.accents[i]??1)+2)%3;
+      b.className='dot l'+state.accents[i];
+      persist();
+    });
+    c.appendChild(b);
+  }
+}
+function setBeats(n){
+  state.beats=clamp(n,1,12);
+  fixAccents();
+  $('#beats-num').textContent=state.beats;
+  renderDots();
+  persist();metaThrottle();
+}
+function renderSubdiv(){
+  $$('#subdiv .chip').forEach(ch=>ch.classList.toggle('sel',+ch.dataset.v===state.subdiv));
+}
+function subdivLabel(v){const f=SUBDIVS.find(s=>s.v===+v);return f?f.label:'4분';}
+
+function renderTrainerInfo(){
+  const el=$('#trainer-info'), tr=state.trainer;
+  if(!tr.on){el.textContent='';return;}
+  if(state.bpm===tr.target){el.textContent='목표 BPM 도달!';return;}
+  if(state.playing){
+    el.textContent='다음 변경까지 '+(tr.every-barsSince)+'마디 → 목표 '+tr.target+' BPM';
+  }else{
+    el.textContent='재생하면 매 '+tr.every+'마디마다 '+(tr.target>state.bpm?'+':'−')+tr.step+' BPM씩 목표 '+tr.target+'까지 변해요';
+  }
+}
+function syncTrainerUI(){
+  $('#tr-on').checked=state.trainer.on;
+  $('#tr-every').value=state.trainer.every;
+  $('#tr-step').value=state.trainer.step;
+  $('#tr-target').value=state.trainer.target;
+  $('#trainer-card').classList.toggle('on',state.trainer.on);
+  renderTrainerInfo();
+}
+
+/* ---------- 프리셋 ---------- */
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function snapshot(name){return{name,bpm:state.bpm,beats:state.beats,subdiv:state.subdiv,accents:[...state.accents],trainer:{...state.trainer}};}
+function applyPreset(p){
+  setBpm(p.bpm);
+  setBeats(Math.round(+p.beats)||4);
+  state.subdiv=[1,2,3,4,6].includes(+p.subdiv)?+p.subdiv:1;
+  renderSubdiv();
+  if(Array.isArray(p.accents)){state.accents=p.accents.map(a=>[0,1,2].includes(+a)?+a:1);fixAccents();renderDots();}
+  if(p.trainer)state.trainer={on:!!p.trainer.on,
+    every:clamp(Math.round(+p.trainer.every)||4,1,64),
+    step:clamp(Math.round(+p.trainer.step)||5,1,50),
+    target:clamp(Math.round(+p.trainer.target)||160,BPM_MIN,BPM_MAX)};
+  barsSince=0;
+  syncTrainerUI();persist();
+}
+function renderPresets(){
+  const wrap=$('#preset-list');wrap.innerHTML='';
+  if(!presets.length){wrap.innerHTML='<p class="empty">저장된 프리셋이 없어요</p>';return;}
+  presets.forEach((p,i)=>{
+    const row=document.createElement('div');row.className='preset';
+    const btn=document.createElement('button');btn.type='button';btn.className='preset-load';
+    btn.innerHTML='<b>'+escapeHtml(p.name)+'</b><span>'+p.bpm+' BPM · '+p.beats+'박 · '+subdivLabel(p.subdiv)+(p.trainer&&p.trainer.on?' · 트레이너':'')+'</span>';
+    btn.addEventListener('click',()=>applyPreset(p));
+    const del=document.createElement('button');del.type='button';del.className='preset-del';
+    del.textContent='×';del.setAttribute('aria-label',p.name+' 삭제');
+    del.addEventListener('click',()=>{presets.splice(i,1);savePresets();renderPresets();});
+    row.append(btn,del);
+    wrap.appendChild(row);
+  });
+}
+
+/* ---------- 탭 템포 ---------- */
+let taps=[];
+function doTap(){
+  const now=performance.now();
+  if(taps.length&&now-taps[taps.length-1]>2200)taps=[];
+  taps.push(now);
+  if(taps.length>9)taps.shift();
+  if(taps.length>=2){
+    let sum=0;
+    for(let i=1;i<taps.length;i++)sum+=taps[i]-taps[i-1];
+    setBpm(60000/(sum/(taps.length-1)));
+  }
+  const b=$('#tap');
+  b.classList.add('flash');
+  setTimeout(()=>b.classList.remove('flash'),90);
+}
+
+/* ---------- 길게 누르면 반복되는 버튼 ---------- */
+function holdable(el,fn){
+  let t=null,iv=null;
+  el.addEventListener('pointerdown',e=>{
+    e.preventDefault();fn();
+    t=setTimeout(()=>{iv=setInterval(fn,70);},500);
+  });
+  ['pointerup','pointerleave','pointercancel'].forEach(ev=>
+    el.addEventListener(ev,()=>{clearTimeout(t);clearInterval(iv);t=iv=null;}));
+}
+
+/* ---------- 이벤트 바인딩 ---------- */
+holdable($('#bpm-m5'),()=>setBpm(state.bpm-5));
+holdable($('#bpm-m1'),()=>setBpm(state.bpm-1));
+holdable($('#bpm-p1'),()=>setBpm(state.bpm+1));
+holdable($('#bpm-p5'),()=>setBpm(state.bpm+5));
+holdable($('#beats-minus'),()=>setBeats(state.beats-1));
+holdable($('#beats-plus'),()=>setBeats(state.beats+1));
+$('#tap').addEventListener('click',doTap);
+$('#bpm-range').addEventListener('input',e=>setBpm(+e.target.value));
+$('#vol').addEventListener('input',e=>setVolume(e.target.value/100));
+$('#play').addEventListener('click',()=>togglePlay());
+$('#awake').addEventListener('change',e=>{
+  state.keepAwake=e.target.checked;persist();
+  if(state.playing){state.keepAwake?wakeOn():wakeOff();}
+});
+$('#tr-on').addEventListener('change',e=>{
+  state.trainer.on=e.target.checked;barsSince=0;
+  $('#trainer-card').classList.toggle('on',state.trainer.on);
+  persist();renderTrainerInfo();
+});
+[['tr-every','every',1,64],['tr-step','step',1,50],['tr-target','target',BPM_MIN,BPM_MAX]].forEach(([id,key,lo,hi])=>{
+  $('#'+id).addEventListener('change',e=>{
+    const v=clamp(Math.round(+e.target.value)||lo,lo,hi);
+    state.trainer[key]=v;e.target.value=v;
+    persist();renderTrainerInfo();
+  });
+});
+$('#preset-save').addEventListener('click',()=>{
+  const inp=$('#preset-name');
+  let name=inp.value.trim();
+  if(!name)name=state.bpm+' BPM · '+state.beats+'박';
+  presets.unshift(snapshot(name));
+  if(presets.length>30)presets.length=30;
+  savePresets();renderPresets();
+  inp.value='';inp.blur();
+});
+$('#preset-name').addEventListener('keydown',e=>{if(e.key==='Enter')$('#preset-save').click();});
+
+const sd=$('#subdiv');
+SUBDIVS.forEach(s=>{
+  const b=document.createElement('button');
+  b.type='button';b.className='chip';b.dataset.v=s.v;b.textContent=s.label;
+  b.addEventListener('click',()=>{state.subdiv=s.v;renderSubdiv();persist();});
+  sd.appendChild(b);
+});
+
+document.addEventListener('keydown',e=>{
+  if(e.target&&/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))return;
+  if(e.code==='Space'){e.preventDefault();togglePlay();}
+  else if(e.key==='ArrowUp'){e.preventDefault();setBpm(state.bpm+1);}
+  else if(e.key==='ArrowDown'){e.preventDefault();setBpm(state.bpm-1);}
+  else if(e.key==='ArrowRight'){e.preventDefault();setBpm(state.bpm+5);}
+  else if(e.key==='ArrowLeft'){e.preventDefault();setBpm(state.bpm-5);}
+  else if(e.key==='t'||e.key==='T'){doTap();}
+});
+
+/* ---------- 초기화 ---------- */
+restore();loadPresets();
+$('#bpm-num').textContent=state.bpm;
+$('#bpm-range').value=state.bpm;
+$('#beats-num').textContent=state.beats;
+$('#vol').value=Math.round(state.volume*100);
+$('#awake').checked=state.keepAwake;
+renderDots();renderSubdiv();syncTrainerUI();renderPresets();renderPlay();
+requestAnimationFrame(frame);
+
+/* 테스트/디버그 훅 */
+window.__dm={
+  state,
+  get times(){return dbgTimes.slice();},
+  get routed(){return routed;},
+  get barsSince(){return barsSince;},
+  ctxTime:()=>ctx?ctx.currentTime:0
+};
+</script>
+<script>
+if('serviceWorker' in navigator && (location.protocol==='https:'||['localhost','127.0.0.1'].includes(location.hostname))){
+  addEventListener('load',()=>{navigator.serviceWorker.register('./sw.js').catch(()=>{});});
+}
+</script>
+</body>
+</html>

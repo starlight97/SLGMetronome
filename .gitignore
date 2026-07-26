@@ -1,0 +1,6 @@
+node_modules/
+shot-*.png
+.DS_Store
+Thumbs.db
+__pycache__/
+.claude/settings.local.json

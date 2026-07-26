@@ -1,0 +1,16 @@
+{
+  "name": "SLGMetronome",
+  "short_name": "SLGMetronome",
+  "description": "드러머를 위한 개인용 메트로놈 — 백그라운드 재생, 강세 설정, 서브디비전, 프리셋, 템포 트레이너",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0d10",
+  "theme_color": "#0b0d10",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
