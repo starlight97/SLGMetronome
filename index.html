@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="description" content="드러머를 위한 개인용 메트로놈 — 백그라운드 재생, 강세 설정, 서브디비전, 프리셋, 템포 트레이너">
+<meta name="description" content="Drum metronome PWA — background playback, accent patterns, subdivisions, presets, tempo trainer">
 <title>SLGMetronome</title>
 <style>
   :root{
@@ -160,7 +160,7 @@
 
 <header>
   <h1>SLGMetronome</h1>
-  <div class="bar-counter">마디 <b id="bar-num">–</b></div>
+  <div class="bar-counter">Bar <b id="bar-num">–</b></div>
 </header>
 
 <section class="card bpm-wrap">
@@ -173,15 +173,15 @@
     <button type="button" class="btn" id="bpm-p1">+1</button>
     <button type="button" class="btn" id="bpm-p5">+5</button>
   </div>
-  <input type="range" id="bpm-range" min="20" max="300" step="1" value="120" aria-label="BPM">
+  <input type="range" id="bpm-range" min="20" max="500" step="1" value="120" aria-label="BPM">
 </section>
 
 <section class="card">
-  <h2>리듬</h2>
+  <h2>RHYTHM</h2>
   <div class="dots" id="dots"></div>
   <div class="rhythm-rows">
     <div class="row">
-      <span class="row-label">박자</span>
+      <span class="row-label">Beats</span>
       <div class="stepper">
         <button type="button" class="btn" id="beats-minus">−</button>
         <b id="beats-num">4</b>
@@ -189,58 +189,58 @@
       </div>
     </div>
     <div class="row">
-      <span class="row-label">서브디비전</span>
+      <span class="row-label">Subdivision</span>
       <div class="chips" id="subdiv"></div>
     </div>
   </div>
-  <p class="hint">동그라미를 누르면 박마다 강세를 바꿀 수 있어요 (강 · 중 · 무음)</p>
+  <p class="hint">Tap a circle to set each beat's accent (accent · normal · mute)</p>
 </section>
 
 <section class="card" id="trainer-card">
   <div class="trainer-head">
-    <h2>템포 트레이너</h2>
+    <h2>TEMPO TRAINER</h2>
     <span class="switch"><input type="checkbox" id="tr-on"><i></i></span>
   </div>
   <div class="trainer-body">
     <div class="trainer-fields">
-      매 <input type="number" class="num-in" id="tr-every" min="1" max="64" value="4" inputmode="numeric"> 마디마다
-      <input type="number" class="num-in" id="tr-step" min="1" max="50" value="5" inputmode="numeric"> BPM씩 → 목표
-      <input type="number" class="num-in" id="tr-target" min="20" max="300" value="160" inputmode="numeric"> BPM
+      Every <input type="number" class="num-in" id="tr-every" min="1" max="64" value="4" inputmode="numeric"> bars, step
+      <input type="number" class="num-in" id="tr-step" min="1" max="50" value="5" inputmode="numeric"> BPM → target
+      <input type="number" class="num-in" id="tr-target" min="20" max="500" value="160" inputmode="numeric"> BPM
     </div>
     <p class="trainer-info" id="trainer-info"></p>
   </div>
 </section>
 
 <section class="card">
-  <h2>프리셋</h2>
+  <h2>PRESETS</h2>
   <div class="preset-form">
-    <input type="text" id="preset-name" placeholder="이름 (예: 곡 제목)" maxlength="40">
-    <button type="button" class="btn" id="preset-save">저장</button>
+    <input type="text" id="preset-name" placeholder="Name (e.g. song title)" maxlength="40">
+    <button type="button" class="btn" id="preset-save">Save</button>
   </div>
   <div class="preset-list" id="preset-list"></div>
 </section>
 
 <section class="card">
   <div class="foot-row">
-    <span class="foot-label">음량</span>
-    <input type="range" id="vol" min="0" max="100" step="1" value="80" aria-label="음량">
+    <span class="foot-label">Volume</span>
+    <input type="range" id="vol" min="0" max="100" step="1" value="80" aria-label="Volume">
   </div>
   <div class="foot-row awake-row">
-    <label><span class="switch"><input type="checkbox" id="awake" checked><i></i></span> 재생 중 화면 꺼짐 방지</label>
+    <label><span class="switch"><input type="checkbox" id="awake" checked><i></i></span> Keep screen on while playing</label>
   </div>
-  <p class="note">재생 중에는 다른 앱으로 전환해도 소리가 유지돼요. 미디어 알림에서 재생/정지를 제어할 수 있어요.</p>
-  <p class="kbd-hint">Space 시작/정지 · ↑↓ ±1 BPM · ←→ ±5 BPM · T 탭 템포</p>
+  <p class="note">Audio keeps playing when you switch to another app. Use the media notification to play or pause.</p>
+  <p class="kbd-hint">Space play/stop · ↑↓ ±1 BPM · ←→ ±5 BPM · T tap tempo</p>
 </section>
 
-<button type="button" class="play-btn" id="play">시작</button>
+<button type="button" class="play-btn" id="play">Start</button>
 <audio id="audio-out" playsinline style="display:none"></audio>
 
 <script id="app">
 'use strict';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
-const BPM_MIN=20, BPM_MAX=300;
-const SUBDIVS=[{v:1,label:'4분'},{v:2,label:'8분'},{v:3,label:'셋잇단'},{v:4,label:'16분'},{v:6,label:'6연음'}];
+const BPM_MIN=20, BPM_MAX=500;
+const SUBDIVS=[{v:1,label:'Quarter'},{v:2,label:'8th'},{v:3,label:'Triplet'},{v:4,label:'16th'},{v:6,label:'Sextuplet'}];
 
 /* ---------- 저장소 (localStorage 불가 환경에서는 메모리로 폴백) ---------- */
 const store=(()=>{try{const k='__dm_t';localStorage.setItem(k,'1');localStorage.removeItem(k);return localStorage;}
@@ -340,7 +340,7 @@ function updateMeta(){
   if(!('mediaSession' in navigator))return;
   try{
     navigator.mediaSession.metadata=new MediaMetadata({
-      title:state.bpm+' BPM · '+state.beats+'박자',
+      title:state.bpm+' BPM · '+state.beats+' beats',
       artist:'SLGMetronome'});
     navigator.mediaSession.playbackState=state.playing?'playing':'paused';
   }catch(e){}
@@ -502,7 +502,7 @@ function setVolume(v){
 /* ---------- 렌더링 ---------- */
 function renderPlay(){
   const b=$('#play');
-  b.textContent=state.playing?'정지':'시작';
+  b.textContent=state.playing?'Stop':'Start';
   b.classList.toggle('playing',state.playing);
 }
 function renderDots(){
@@ -511,7 +511,7 @@ function renderDots(){
     const b=document.createElement('button');
     b.type='button';
     b.className='dot l'+(state.accents[i]??1);
-    b.setAttribute('aria-label',(i+1)+'번째 박 강세');
+    b.setAttribute('aria-label','Beat '+(i+1)+' accent');
     b.addEventListener('click',()=>{
       state.accents[i]=((state.accents[i]??1)+2)%3;
       b.className='dot l'+state.accents[i];
@@ -530,16 +530,16 @@ function setBeats(n){
 function renderSubdiv(){
   $$('#subdiv .chip').forEach(ch=>ch.classList.toggle('sel',+ch.dataset.v===state.subdiv));
 }
-function subdivLabel(v){const f=SUBDIVS.find(s=>s.v===+v);return f?f.label:'4분';}
+function subdivLabel(v){const f=SUBDIVS.find(s=>s.v===+v);return f?f.label:'Quarter';}
 
 function renderTrainerInfo(){
   const el=$('#trainer-info'), tr=state.trainer;
   if(!tr.on){el.textContent='';return;}
-  if(state.bpm===tr.target){el.textContent='목표 BPM 도달!';return;}
+  if(state.bpm===tr.target){el.textContent='Target BPM reached!';return;}
   if(state.playing){
-    el.textContent='다음 변경까지 '+(tr.every-barsSince)+'마디 → 목표 '+tr.target+' BPM';
+    el.textContent='Next change in '+(tr.every-barsSince)+' bar'+(tr.every-barsSince===1?'':'s')+' → target '+tr.target+' BPM';
   }else{
-    el.textContent='재생하면 매 '+tr.every+'마디마다 '+(tr.target>state.bpm?'+':'−')+tr.step+' BPM씩 목표 '+tr.target+'까지 변해요';
+    el.textContent='While playing: '+(tr.target>state.bpm?'+':'−')+tr.step+' BPM every '+tr.every+' bar'+(tr.every===1?'':'s')+' until '+tr.target+' BPM';
   }
 }
 function syncTrainerUI(){
@@ -569,14 +569,14 @@ function applyPreset(p){
 }
 function renderPresets(){
   const wrap=$('#preset-list');wrap.innerHTML='';
-  if(!presets.length){wrap.innerHTML='<p class="empty">저장된 프리셋이 없어요</p>';return;}
+  if(!presets.length){wrap.innerHTML='<p class="empty">No saved presets</p>';return;}
   presets.forEach((p,i)=>{
     const row=document.createElement('div');row.className='preset';
     const btn=document.createElement('button');btn.type='button';btn.className='preset-load';
-    btn.innerHTML='<b>'+escapeHtml(p.name)+'</b><span>'+p.bpm+' BPM · '+p.beats+'박 · '+subdivLabel(p.subdiv)+(p.trainer&&p.trainer.on?' · 트레이너':'')+'</span>';
+    btn.innerHTML='<b>'+escapeHtml(p.name)+'</b><span>'+p.bpm+' BPM · '+p.beats+' beats · '+subdivLabel(p.subdiv)+(p.trainer&&p.trainer.on?' · Trainer':'')+'</span>';
     btn.addEventListener('click',()=>applyPreset(p));
     const del=document.createElement('button');del.type='button';del.className='preset-del';
-    del.textContent='×';del.setAttribute('aria-label',p.name+' 삭제');
+    del.textContent='×';del.setAttribute('aria-label','Delete '+p.name);
     del.addEventListener('click',()=>{presets.splice(i,1);savePresets();renderPresets();});
     row.append(btn,del);
     wrap.appendChild(row);
@@ -641,7 +641,7 @@ $('#tr-on').addEventListener('change',e=>{
 $('#preset-save').addEventListener('click',()=>{
   const inp=$('#preset-name');
   let name=inp.value.trim();
-  if(!name)name=state.bpm+' BPM · '+state.beats+'박';
+  if(!name)name=state.bpm+' BPM · '+state.beats+' beats';
   presets.unshift(snapshot(name));
   if(presets.length>30)presets.length=30;
   savePresets();renderPresets();

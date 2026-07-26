@@ -1,8 +1,8 @@
 {
   "name": "SLGMetronome",
   "short_name": "SLGMetronome",
-  "description": "드러머를 위한 개인용 메트로놈 — 백그라운드 재생, 강세 설정, 서브디비전, 프리셋, 템포 트레이너",
-  "lang": "ko",
+  "description": "Drum metronome PWA — background playback, accent patterns, subdivisions, presets, tempo trainer",
+  "lang": "en",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
