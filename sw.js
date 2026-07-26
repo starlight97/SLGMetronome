@@ -1,6 +1,6 @@
 /* SLGMetronome 서비스 워커 — 오프라인 캐시 (stale-while-revalidate)
    업데이트를 강제로 확실하게 밀고 싶으면 아래 버전 문자열을 올리면 됨. */
-const CACHE = 'slg-metronome-v2';
+const CACHE = 'slg-metronome-v4';
 const ASSETS = [
   './',
   './index.html',

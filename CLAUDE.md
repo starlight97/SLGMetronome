@@ -10,7 +10,7 @@ Unity C# 클라이언트 개발자(웹 프론트 초심자)가 개인용으로 �
 - `manifest.webmanifest` — PWA 설치 매니페스트
 - `icon-192.png` / `icon-512.png` / `icon-maskable-512.png` — 앱 아이콘
 - `make_icons.py` — 아이콘 재생성 스크립트 (Pillow 필요)
-- `test-metronome.mjs` — Playwright 자동 검증 (타이밍 정확도 + 기능 11개 체크 + 스크린샷)
+- `test-metronome.mjs` — Playwright 자동 검증 (타이밍 정확도 + 기능 12개 체크 + 스크린샷)
 
 ## 절대 깨면 안 되는 것 (오디오 코어)
 
@@ -27,13 +27,15 @@ Unity C# 클라이언트 개발자(웹 프론트 초심자)가 개인용으로 �
 ## 컨벤션
 
 - 단일 파일 유지: CSS/JS는 index.html 안에 인라인 (sw.js/manifest 제외). 빌드 도구 도입하지 않는다.
-- UI 텍스트는 영어(외국인 사용자 고려), 다크 테마. 색은 `:root` CSS 변수(`--bg`, `--card`, `--amber` 등)만 사용.
+- UI 텍스트는 한/영 지원: 모든 문구는 index.html의 `I18N` 딕셔너리에 ko/en 쌍으로 추가하고 `T()`로 조회.
+  정적 요소는 `data-i18n` 속성 + `applyLang()`. 기본 언어는 브라우저 언어 자동 감지(`state.lang`), 하단 카드에서 전환.
+- 다크 테마. 색은 `:root` CSS 변수(`--bg`, `--card`, `--amber` 등)만 사용.
 - 터치 타겟 최소 36px. PC 키보드 단축키(Space, ↑↓←→, T) 유지.
 - 상태는 `state` 객체 하나로 관리하고 변경 시 `persist()` 호출. 새 설정 항목은 `restore()`에도 추가.
 
 ## 검증
 
-수정 후 `node test-metronome.mjs` 실행 — 11개 체크 전부 PASS여야 하고,
+수정 후 `node test-metronome.mjs` 실행 — 12개 체크 전부 PASS여야 하고,
 `shot-phone.png`(390×844) / `shot-desktop.png`(1280×800) 스크린샷으로 레이아웃 확인.
 
 최초 1회 준비: `npm init -y && npm i -D playwright && npx playwright install chromium`

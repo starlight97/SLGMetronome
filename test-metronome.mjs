@@ -39,7 +39,7 @@ check('스케줄 간격 정확도', diffs.length >= 4 && maxErr < 0.0001,
 
 // --- 2. 서브디비전 전환 (16분 → 간격 1/4) ---
 await page.click('#subdiv .chip[data-v="4"]');
-await page.waitForTimeout(1200);
+await page.waitForTimeout(1600);
 dbg = await page.evaluate(() => ({ times: window.__dm.times, bpm: window.__dm.state.bpm }));
 const last = dbg.times.slice(-8);
 const d2 = last.slice(1).map((t, i) => t - last[i]);
@@ -90,7 +90,19 @@ await page.click('.preset-load');
 dbg = await page.evaluate(() => ({ bpm: window.__dm.state.bpm }));
 check('프리셋 로드 (BPM 복원)', dbg.bpm === savedBpm, `${dbg.bpm} === ${savedBpm}`);
 
-// --- 8. 템포 트레이너 (매 1마디 +10, 목표 170 → 2마디 후 도달) ---
+// --- 8. 퀵 BPM 버튼 (추가 → 적용 → 삭제) ---
+const qBpm = await page.evaluate(() => window.__dm.state.bpm);
+await page.click('.quick-add');
+const nQuick = await page.evaluate(() => document.querySelectorAll('.quick-chip').length);
+await page.click('#bpm-m5');
+await page.click('.quick-chip .quick-set');
+const qSet = await page.evaluate(() => window.__dm.state.bpm);
+await page.click('.quick-chip .quick-del');
+const nQuick2 = await page.evaluate(() => document.querySelectorAll('.quick-chip').length);
+check('퀵 BPM 추가/적용/삭제', nQuick === 1 && qSet === qBpm && nQuick2 === 0,
+  `chips=${nQuick}→${nQuick2} bpm=${qSet} (기대 ${qBpm})`);
+
+// --- 9. 템포 트레이너 (매 1마디 +10, 목표 170 → 2마디 후 도달) ---
 await page.evaluate(() => {
   const s = window.__dm.state;
   s.bpm = 150; document.querySelector('#bpm-num').textContent = '150';
@@ -105,7 +117,7 @@ dbg = await page.evaluate(() => ({ bpm: window.__dm.state.bpm }));
 check('템포 트레이너 목표 도달', dbg.bpm === 170, `bpm=${dbg.bpm}`);
 await page.click('#play');
 
-// --- 9. 콘솔 에러 ---
+// --- 10. 콘솔 에러 ---
 const realErrors = errors.filter(e => !/autoplay|AudioContext was not allowed/i.test(e));
 check('콘솔 에러 없음', realErrors.length === 0, realErrors.join(' | ').slice(0, 300));
 
