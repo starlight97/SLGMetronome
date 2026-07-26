@@ -102,7 +102,49 @@ const nQuick2 = await page.evaluate(() => document.querySelectorAll('.quick-chip
 check('퀵 BPM 추가/적용/삭제', nQuick === 1 && qSet === qBpm && nQuick2 === 0,
   `chips=${nQuick}→${nQuick2} bpm=${qSet} (기대 ${qBpm})`);
 
-// --- 9. 템포 트레이너 (매 1마디 +10, 목표 170 → 2마디 후 도달) ---
+// --- 9. 퀵 BPM 드래그 순서 변경 (200,195 → 195,200) ---
+await page.click('.quick-add');                       // 200 추가
+await page.click('#bpm-m5');                          // bpm 195
+await page.click('.quick-add');                       // 195 추가 → [200,195]
+const qBefore = await page.evaluate(() => window.__dm.state.quickBpms.slice());
+const boxA = await page.locator('.quick-chip').first().boundingBox();
+const boxB = await page.locator('.quick-chip').nth(1).boundingBox();
+await page.mouse.move(boxA.x + boxA.width / 2, boxA.y + boxA.height / 2);
+await page.mouse.down();
+await page.mouse.move(boxB.x + boxB.width * 0.9, boxB.y + boxB.height / 2, { steps: 8 });
+await page.mouse.up();
+const qAfter = await page.evaluate(() => window.__dm.state.quickBpms.slice());
+check('퀵 BPM 드래그 순서 변경',
+  qBefore[0] === 200 && qBefore[1] === 195 && qAfter[0] === 195 && qAfter[1] === 200,
+  `[${qBefore}] → [${qAfter}]`);
+
+// --- 10. 퀵 BPM 정렬 버튼 (내림차순 → 오름차순) ---
+await page.click('#quick-desc');
+const qDesc = await page.evaluate(() => window.__dm.state.quickBpms.slice());
+await page.click('#quick-asc');
+const qAsc = await page.evaluate(() => window.__dm.state.quickBpms.slice());
+check('퀵 BPM 정렬 (내림/오름)',
+  qDesc[0] === 200 && qDesc[1] === 195 && qAsc[0] === 195 && qAsc[1] === 200,
+  `desc=[${qDesc}] asc=[${qAsc}]`);
+
+// --- 11. 퀵 BPM 길게 눌러 값 수정 (195 → 240, BPM은 그대로) ---
+const bpmBeforeHold = await page.evaluate(() => window.__dm.state.bpm);
+const boxE = await page.locator('.quick-chip').first().boundingBox();
+await page.mouse.move(boxE.x + boxE.width / 2, boxE.y + boxE.height / 2);
+await page.mouse.down();
+await page.waitForTimeout(700);
+await page.mouse.up();
+const modalShown = await page.evaluate(() => !document.querySelector('#quick-edit-back').hidden);
+await page.fill('#quick-edit-in', '240');
+await page.click('#quick-edit-ok');
+const qEdited = await page.evaluate(() => window.__dm.state.quickBpms.slice());
+const modalHidden = await page.evaluate(() => document.querySelector('#quick-edit-back').hidden);
+const bpmAfterHold = await page.evaluate(() => window.__dm.state.bpm);
+check('퀵 BPM 길게 눌러 값 수정',
+  modalShown && modalHidden && qEdited[0] === 240 && qEdited[1] === 200 && bpmAfterHold === bpmBeforeHold,
+  `modal=${modalShown} → [${qEdited}] bpm=${bpmAfterHold}(기대 ${bpmBeforeHold})`);
+
+// --- 12. 템포 트레이너 (매 1마디 +10, 목표 170 → 2마디 후 도달) ---
 await page.evaluate(() => {
   const s = window.__dm.state;
   s.bpm = 150; document.querySelector('#bpm-num').textContent = '150';
@@ -117,7 +159,7 @@ dbg = await page.evaluate(() => ({ bpm: window.__dm.state.bpm }));
 check('템포 트레이너 목표 도달', dbg.bpm === 170, `bpm=${dbg.bpm}`);
 await page.click('#play');
 
-// --- 10. 콘솔 에러 ---
+// --- 13. 콘솔 에러 ---
 const realErrors = errors.filter(e => !/autoplay|AudioContext was not allowed/i.test(e));
 check('콘솔 에러 없음', realErrors.length === 0, realErrors.join(' | ').slice(0, 300));
 

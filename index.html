@@ -84,6 +84,8 @@
   .hint{font-size:12px; color:var(--dim2); margin:10px 0 0; text-align:center;}
 
   /* ---- 퀵 BPM ---- */
+  .quick-head{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px;}
+  .quick-head h2{margin:0;}
   .quick-chip{display:flex; align-items:stretch; background:var(--card2); border:1px solid var(--line); border-radius:999px; overflow:hidden; touch-action:none;}
   .quick-chip.dragging{opacity:.9; z-index:5; border-color:var(--amber); box-shadow:0 6px 18px rgba(0,0,0,.45);}
   .quick-set{background:none; border:none; color:var(--txt); padding:9px 2px 9px 14px; font-size:14px; font-weight:700; font-variant-numeric:tabular-nums; cursor:pointer;}
@@ -92,6 +94,14 @@
   .quick-chip.sel{background:rgba(245,165,36,.14); border-color:var(--amber);}
   .quick-chip.sel .quick-set{color:var(--amber2);}
   .quick-add{border-style:dashed; min-width:48px; font-size:16px;}
+  .modal-back{position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:20;}
+  .modal-back[hidden]{display:none;}
+  .modal-card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; width:min(86%,320px);}
+  .modal-card h3{margin:0 0 14px; font-size:14px; color:var(--dim); font-weight:600; letter-spacing:.05em;}
+  .modal-card .num-in{width:100%; font-size:22px; padding:12px 8px;}
+  .modal-btns{display:flex; gap:8px; margin-top:14px;}
+  .modal-btns .btn{flex:1;}
+  .modal-ok{background:var(--amber); border-color:var(--amber); color:#191204; font-weight:800;}
 
   /* ---- 트레이너 ---- */
   .trainer-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;}
@@ -187,9 +197,15 @@
 </section>
 
 <section class="card">
-  <h2 data-i18n="quickBpm">QUICK BPM</h2>
+  <div class="quick-head">
+    <h2 data-i18n="quickBpm">QUICK BPM</h2>
+    <div class="chips">
+      <button type="button" class="chip" id="quick-asc" data-i18n="quickAsc">Ascending</button>
+      <button type="button" class="chip" id="quick-desc" data-i18n="quickDesc">Descending</button>
+    </div>
+  </div>
   <div class="chips" id="quick-list"></div>
-  <p class="hint" data-i18n="quickHint">+ saves the current BPM as a button · × removes it</p>
+  <p class="hint" data-i18n="quickHint">+ saves the current BPM as a button · × removes it · drag to reorder</p>
 </section>
 
 <section class="card">
@@ -255,6 +271,17 @@
   <p class="kbd-hint" data-i18n="kbd">Space play/stop · ↑↓ ±1 BPM · ←→ ±5 BPM · T tap tempo</p>
 </section>
 
+<div class="modal-back" id="quick-edit-back" hidden>
+  <div class="modal-card">
+    <h3 data-i18n="quickEditTitle">Edit quick BPM</h3>
+    <input type="number" class="num-in" id="quick-edit-in" min="20" max="500" inputmode="numeric" aria-label="BPM">
+    <div class="modal-btns">
+      <button type="button" class="btn" id="quick-edit-cancel" data-i18n="cancel">Cancel</button>
+      <button type="button" class="btn modal-ok" id="quick-edit-ok" data-i18n="ok">OK</button>
+    </div>
+  </div>
+</div>
+
 <button type="button" class="play-btn" id="play">Start</button>
 <audio id="audio-out" playsinline style="display:none"></audio>
 
@@ -278,7 +305,9 @@ const I18N={
     start:'시작', stop:'정지', trainerTag:'트레이너', noPresets:'저장된 프리셋이 없어요',
     reached:'목표 BPM 도달!',
     quickBpm:'퀵 BPM',
-    quickHint:'+ 를 누르면 현재 BPM이 버튼으로 저장돼요 · × 로 삭제',
+    quickAsc:'오름차순', quickDesc:'내림차순',
+    quickEditTitle:'퀵 BPM 값 수정', ok:'확인', cancel:'취소',
+    quickHint:'+ 를 누르면 현재 BPM이 버튼으로 저장돼요 · × 로 삭제 · 끌어서 순서 변경 · 꾹 눌러 값 수정',
     quickAddAria:'현재 BPM을 퀵 버튼으로 저장',
     quickSetAria:v=>v+' BPM으로 설정',
     subdivs:{1:'4분',2:'8분',3:'셋잇단',4:'16분',6:'6연음'},
@@ -298,7 +327,9 @@ const I18N={
     start:'Start', stop:'Stop', trainerTag:'Trainer', noPresets:'No saved presets',
     reached:'Target BPM reached!',
     quickBpm:'QUICK BPM',
-    quickHint:'+ saves the current BPM as a button · × removes it',
+    quickAsc:'Ascending', quickDesc:'Descending',
+    quickEditTitle:'Edit quick BPM', ok:'OK', cancel:'Cancel',
+    quickHint:'+ saves the current BPM as a button · × removes it · drag to reorder · long-press to edit',
     quickAddAria:'Save current BPM as a quick button',
     quickSetAria:v=>'Set '+v+' BPM',
     subdivs:{1:'Quarter',2:'8th',3:'Triplet',4:'16th',6:'Sextuplet'},
@@ -572,6 +603,88 @@ function setBpm(v,fromTrainer){
 }
 
 /* ---------- 퀵 BPM 버튼 ---------- */
+let quickDragged=false;  /* 드래그 직후 발생하는 click을 무시하기 위한 플래그 */
+function enableQuickDrag(chip,wrap){
+  let ptr=null,sx=0,sy=0,gx=0,gy=0,drag=false,holdT=null,held=false;
+  const move=e=>{
+    if(e.pointerId!==ptr||held)return;
+    if(!drag){
+      if(Math.abs(e.clientX-sx)<6&&Math.abs(e.clientY-sy)<6)return;
+      clearTimeout(holdT);holdT=null;
+      drag=true;
+      const r=chip.getBoundingClientRect();
+      gx=sx-r.left;gy=sy-r.top;
+      chip.classList.add('dragging');
+      chip.style.pointerEvents='none';  /* elementFromPoint가 아래 칩을 보게 함 */
+    }
+    const el=document.elementFromPoint(e.clientX,e.clientY);
+    const over=el?el.closest('.quick-chip'):null;
+    if(over&&over!==chip){
+      const r=over.getBoundingClientRect();
+      wrap.insertBefore(chip,(e.clientX-r.left)<r.width/2?over:over.nextSibling);
+    }
+    chip.style.transform='';
+    const b=chip.getBoundingClientRect();
+    chip.style.transform='translate('+(e.clientX-b.left-gx)+'px,'+(e.clientY-b.top-gy)+'px)';
+  };
+  const up=e=>{
+    if(e.pointerId!==ptr)return;
+    ptr=null;
+    clearTimeout(holdT);holdT=null;
+    window.removeEventListener('pointermove',move);
+    window.removeEventListener('pointerup',up);
+    window.removeEventListener('pointercancel',up);
+    if(held){held=false;quickDragged=true;setTimeout(()=>{quickDragged=false;},0);return;}
+    if(!drag)return;
+    drag=false;
+    chip.classList.remove('dragging');
+    chip.style.pointerEvents='';
+    chip.style.transform='';
+    state.quickBpms=$$('#quick-list .quick-chip').map(c=>+c.dataset.v);
+    persist();
+    quickDragged=true;setTimeout(()=>{quickDragged=false;},0);
+  };
+  chip.addEventListener('pointerdown',e=>{
+    if(ptr!==null||e.button)return;
+    ptr=e.pointerId;sx=e.clientX;sy=e.clientY;held=false;
+    holdT=setTimeout(()=>{  /* 500ms 동안 안 움직이면 롱프레스 → 값 수정 팝업 */
+      holdT=null;
+      if(drag)return;
+      held=true;
+      openQuickEdit(state.quickBpms.indexOf(+chip.dataset.v));
+    },500);
+    window.addEventListener('pointermove',move);
+    window.addEventListener('pointerup',up);
+    window.addEventListener('pointercancel',up);
+  });
+  chip.addEventListener('click',e=>{
+    if(quickDragged){e.stopPropagation();e.preventDefault();}
+  },true);
+  chip.addEventListener('contextmenu',e=>e.preventDefault());
+}
+
+/* 퀵 BPM 값 수정 팝업 */
+let quickEditIdx=-1;
+function openQuickEdit(i){
+  if(i<0)return;
+  quickEditIdx=i;
+  const inp=$('#quick-edit-in');
+  inp.value=state.quickBpms[i];
+  $('#quick-edit-back').hidden=false;
+  setTimeout(()=>{inp.focus();inp.select();},0);
+}
+function closeQuickEdit(){
+  $('#quick-edit-back').hidden=true;
+  quickEditIdx=-1;
+}
+function confirmQuickEdit(){
+  if(quickEditIdx<0){closeQuickEdit();return;}
+  const i=quickEditIdx, old=state.quickBpms[i];
+  const v=clamp(Math.round(+$('#quick-edit-in').value)||old,BPM_MIN,BPM_MAX);
+  state.quickBpms[i]=v;
+  state.quickBpms=state.quickBpms.filter((x,idx)=>x!==v||idx===i);  /* 다른 칩과 값이 겹치면 그쪽을 제거 */
+  persist();renderQuick();closeQuickEdit();
+}
 function renderQuick(){
   const wrap=$('#quick-list');wrap.innerHTML='';
   state.quickBpms.forEach(v=>{
@@ -590,6 +703,7 @@ function renderQuick(){
       persist();renderQuick();
     });
     chip.append(set,del);
+    enableQuickDrag(chip,wrap);
     wrap.appendChild(chip);
   });
   const add=document.createElement('button');
@@ -597,7 +711,7 @@ function renderQuick(){
   add.setAttribute('aria-label',T().quickAddAria);
   add.addEventListener('click',()=>{
     if(state.quickBpms.includes(state.bpm)||state.quickBpms.length>=QUICK_MAX)return;
-    state.quickBpms=[...state.quickBpms,state.bpm].sort((a,b)=>a-b);
+    state.quickBpms=[...state.quickBpms,state.bpm];
     persist();renderQuick();
   });
   wrap.appendChild(add);
@@ -773,6 +887,15 @@ $('#preset-save').addEventListener('click',()=>{
   inp.value='';inp.blur();
 });
 $('#preset-name').addEventListener('keydown',e=>{if(e.key==='Enter')$('#preset-save').click();});
+$('#quick-asc').addEventListener('click',()=>{state.quickBpms.sort((a,b)=>a-b);persist();renderQuick();});
+$('#quick-desc').addEventListener('click',()=>{state.quickBpms.sort((a,b)=>b-a);persist();renderQuick();});
+$('#quick-edit-ok').addEventListener('click',confirmQuickEdit);
+$('#quick-edit-cancel').addEventListener('click',closeQuickEdit);
+$('#quick-edit-back').addEventListener('click',e=>{if(e.target===e.currentTarget)closeQuickEdit();});
+$('#quick-edit-in').addEventListener('keydown',e=>{
+  if(e.key==='Enter')confirmQuickEdit();
+  else if(e.key==='Escape')closeQuickEdit();
+});
 
 const sd=$('#subdiv');
 SUBDIVS.forEach(v=>{
