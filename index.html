@@ -33,8 +33,12 @@
   header{display:flex; align-items:baseline; justify-content:space-between; padding:2px 2px 10px;}
   header h1{font-size:16px; font-weight:700; margin:0; letter-spacing:.02em;}
   .ver{font-size:11px; font-weight:600; color:var(--dim2); letter-spacing:0;}
-  .bar-counter{font-size:13px; color:var(--dim);}
-  .bar-counter b{color:var(--txt); font-variant-numeric:tabular-nums; font-size:15px;}
+  .bpm-top{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:14px;}
+  .bpm-side{flex:1; display:flex; flex-direction:column; gap:3px; align-items:center; min-width:0;}
+  .side-label{font-size:11px; color:var(--dim); letter-spacing:.08em;}
+  .bpm-side b{font-size:19px; color:var(--txt); font-variant-numeric:tabular-nums; font-weight:700;}
+  .bpm-side #bar-num{color:var(--amber2);}
+  .bpm-side b.dim{color:var(--dim2);}
 
   .card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:12px;}
   .card h2{font-size:12px; font-weight:600; color:var(--dim); margin:0 0 12px; letter-spacing:.08em;}
@@ -60,7 +64,7 @@
     font-size:clamp(64px,19vw,92px); font-weight:800; line-height:1;
     font-variant-numeric:tabular-nums; letter-spacing:-.02em;
   }
-  .bpm-label{font-size:12px; color:var(--dim); letter-spacing:.35em; margin:2px 0 14px;}
+  .bpm-label{font-size:12px; color:var(--dim); letter-spacing:.35em; margin:2px 0 0;}
   .bpm-btns{display:grid; grid-template-columns:1fr 1fr 1.4fr 1fr 1fr; gap:8px; margin-bottom:12px;}
   .btn{
     background:#1c212a; border:1px solid var(--line); color:var(--txt);
@@ -201,12 +205,23 @@
 
 <header>
   <h1>SLGMetronome <span class="ver" id="app-ver"></span></h1>
-  <div class="bar-counter"><span data-i18n="bar">Bar</span> <b id="bar-num">–</b></div>
 </header>
 
 <section class="card bpm-wrap">
-  <div class="bpm-num" id="bpm-num">120</div>
-  <div class="bpm-label">BPM</div>
+  <div class="bpm-top">
+    <div class="bpm-side">
+      <span class="side-label" data-i18n="elapsed">Time</span>
+      <b id="elapsed" class="dim">–</b>
+    </div>
+    <div>
+      <div class="bpm-num" id="bpm-num">120</div>
+      <div class="bpm-label">BPM</div>
+    </div>
+    <div class="bpm-side">
+      <span class="side-label" data-i18n="bar">Bar</span>
+      <b id="bar-num">–</b>
+    </div>
+  </div>
   <div class="bpm-btns">
     <button type="button" class="btn" id="bpm-m5">−5</button>
     <button type="button" class="btn" id="bpm-m1">−1</button>
@@ -327,7 +342,7 @@
 <script id="app">
 'use strict';
 /* 배포할 때마다 이 버전만 올리면 됨 — 헤더에 표시되고 sw.js 캐시 버전으로도 전달된다 */
-const APP_VER='v16';
+const APP_VER='v17';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const BPM_MIN=20, BPM_MAX=500;
@@ -386,7 +401,7 @@ function patternIcon(id){
 /* ---------- 다국어 (모든 UI 문구는 여기에 ko/en 쌍으로 추가) ---------- */
 const I18N={
   ko:{
-    bar:'마디', rhythm:'리듬', beats:'박자', subdivision:'서브디비전',
+    bar:'마디', elapsed:'연습', rhythm:'리듬', beats:'박자', subdivision:'서브디비전',
     hint:'동그라미를 누르면 박마다 강세를 바꿀 수 있어요 (강 · 중 · 무음)',
     trainer:'템포 트레이너', tr1:'매', tr2:'마디마다', tr3:'BPM씩 → 목표', tr4:'BPM',
     presets:'프리셋', presetPh:'이름 (예: 곡 제목)', save:'저장',
@@ -411,7 +426,7 @@ const I18N={
     accentAria:i=>i+'번째 박 강세', delAria:n=>n+' 삭제'
   },
   en:{
-    bar:'Bar', rhythm:'RHYTHM', beats:'Beats', subdivision:'Subdivision',
+    bar:'Bar', elapsed:'Time', rhythm:'RHYTHM', beats:'Beats', subdivision:'Subdivision',
     hint:"Tap a circle to set each beat's accent (accent · normal · mute)",
     trainer:'TEMPO TRAINER', tr1:'Every', tr2:'bars, step', tr3:'BPM → target', tr4:'BPM',
     presets:'PRESETS', presetPh:'Name (e.g. song title)', save:'Save',
@@ -602,7 +617,7 @@ function makeTicker(){
 
 /* ---------- 스케줄러 ---------- */
 const LOOKAHEAD=.18;
-let nextTime=0, pos={bar:0,beat:0,sub:0}, barsSince=0, queue=[], lastResync=0;
+let nextTime=0, pos={bar:0,beat:0,sub:0}, barsSince=0, queue=[], lastResync=0, playStart=0;
 const dbgTimes=[];
 
 function schedulerTick(){
@@ -680,6 +695,8 @@ async function togglePlay(force){
     if(!state.playing)return;  /* 예열 대기 중 정지를 눌렀으면 시작하지 않음 */
     pos={bar:0,beat:0,sub:0};barsSince=0;queue.length=0;
     nextTime=ctx.currentTime+(warmedUp?.1:.35);  /* 첫 재생은 세션 예열 뒤로 밀어 클릭 뭉침 방지 */
+    playStart=ctx.currentTime;elShown=-1;
+    const el=$('#elapsed');el.classList.remove('dim');el.textContent='0:00';
     warmedUp=true;
     ticker.start();
     if(state.keepAwake)wakeOn();
@@ -692,6 +709,7 @@ async function togglePlay(force){
     if(audioEl){try{audioEl.pause();}catch(e){}}
     wakeOff();
     clearBeatVis();
+    $('#elapsed').classList.add('dim');  /* 마지막 연습 시간은 흐리게 남겨둔다 */
   }
   updateMeta();renderPlay();renderTrainerInfo();
 }
@@ -722,8 +740,16 @@ function frame(){
     while(queue.length&&queue[0].t<=now){ev=queue.shift();if(ev.sub===0)evBeat=ev;}
     if(evBeat&&evBeat!==ev)renderTick(evBeat);  /* 프레임 스톨로 비트+서브 이벤트가 같이 밀려와도 비트 펄스는 건너뛰지 않도록 */
     if(ev)renderTick(ev);
+    renderElapsed();
   }
   requestAnimationFrame(frame);
+}
+let elShown=-1;
+function renderElapsed(){
+  const s=Math.max(0,Math.floor(ctx.currentTime-playStart));
+  if(s===elShown)return;  /* 초가 바뀔 때만 DOM 갱신 */
+  elShown=s;
+  $('#elapsed').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
 }
 function renderTick(ev){
   $('#bar-num').textContent=ev.bar+1;

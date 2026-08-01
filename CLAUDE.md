@@ -10,7 +10,7 @@ Unity C# 클라이언트 개발자(웹 프론트 초심자)가 개인용으로 �
 - `manifest.webmanifest` — PWA 설치 매니페스트
 - `icon-192.png` / `icon-512.png` / `icon-maskable-512.png` — 앱 아이콘
 - `make_icons.py` — 아이콘 재생성 스크립트 (Pillow 필요)
-- `test-metronome.mjs` — Playwright 자동 검증 (타이밍 정확도 + 기능 18개 체크 + 스크린샷)
+- `test-metronome.mjs` — Playwright 자동 검증 (타이밍 정확도 + 기능 19개 체크 + 스크린샷)
 
 ## 절대 깨면 안 되는 것 (오디오 코어)
 
@@ -39,7 +39,7 @@ Unity C# 클라이언트 개발자(웹 프론트 초심자)가 개인용으로 �
 
 ## 검증
 
-수정 후 `node test-metronome.mjs` 실행 — 18개 체크 전부 PASS여야 하고,
+수정 후 `node test-metronome.mjs` 실행 — 19개 체크 전부 PASS여야 하고,
 `shot-phone.png`(390×844) / `shot-desktop.png`(1280×800) 스크린샷으로 레이아웃 확인.
 
 최초 1회 준비: `npm init -y && npm i -D playwright && npx playwright install chromium`

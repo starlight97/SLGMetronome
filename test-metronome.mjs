@@ -37,6 +37,10 @@ const maxErr = Math.max(...diffs.map(d => Math.abs(d - expected)));
 check('스케줄 간격 정확도', diffs.length >= 4 && maxErr < 0.0001,
   `n=${diffs.length} expected=${expected} maxErr=${maxErr.toExponential(2)}`);
 
+// --- 1b. 연습 경과 시간 (재생 ~2.6초 시점) ---
+const elTxt = await page.evaluate(() => document.querySelector('#elapsed').textContent);
+check('연습 시간 카운트', /^0:0[1-5]$/.test(elTxt), `elapsed=${elTxt}`);
+
 // --- 2. 서브디비전 전환 (16분 → 간격 1/4) ---
 await page.click('#subdiv .chip[data-v="4"]');
 await page.waitForTimeout(1600);
