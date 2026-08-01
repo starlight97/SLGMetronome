@@ -200,6 +200,22 @@ check('화면 싱크 보정 슬라이더', dbg.off === 40 && compOk && dbg.val =
   && dbg2.off === 40 && dbg2.slider === '40',
   `off=${dbg.off} compDelta=${dbg.delta} val=${dbg.val} reload=[${dbg2.off},${dbg2.slider}]`);
 
+// --- 12c. 카드 접기 (접힘 → 재로드 유지 → 펼침) ---
+await page.click('.card[data-sec="rhythm"] .fold-btn');
+const foldA = await page.evaluate(() => ({
+  folded: document.querySelector('.card[data-sec="rhythm"]').classList.contains('folded'),
+  dotsHidden: getComputedStyle(document.querySelector('#dots')).display === 'none',
+  aria: document.querySelector('.card[data-sec="rhythm"] .fold-btn').getAttribute('aria-expanded')
+}));
+await page.waitForTimeout(400);                  // persist 디바운스 대기
+await page.reload();
+await page.waitForTimeout(400);
+const foldB = await page.evaluate(() => document.querySelector('.card[data-sec="rhythm"]').classList.contains('folded'));
+await page.click('.card[data-sec="rhythm"] .fold-btn');
+const foldC = await page.evaluate(() => getComputedStyle(document.querySelector('#dots')).display !== 'none');
+check('카드 접기/펼치기', foldA.folded && foldA.dotsHidden && foldA.aria === 'false' && foldB && foldC,
+  `fold=${foldA.folded},${foldA.dotsHidden},aria=${foldA.aria} reload=${foldB} unfold=${foldC}`);
+
 // --- 13. 콘솔 에러 ---
 const realErrors = errors.filter(e => !/autoplay|AudioContext was not allowed/i.test(e));
 check('콘솔 에러 없음', realErrors.length === 0, realErrors.join(' | ').slice(0, 300));

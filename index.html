@@ -39,6 +39,21 @@
   .card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:12px;}
   .card h2{font-size:12px; font-weight:600; color:var(--dim); margin:0 0 12px; letter-spacing:.08em;}
 
+  /* ---- 카드 접기 ---- */
+  .sec-head{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px;}
+  .sec-head h2{margin:0; flex:1;}
+  .quick-head h2,.trainer-head h2{flex:1;}
+  .fold-btn{
+    flex:none; width:36px; height:36px; margin:-8px -6px -8px 0; padding:0;
+    display:flex; align-items:center; justify-content:center;
+    background:none; border:none; color:var(--dim); cursor:pointer; border-radius:10px;
+  }
+  .fold-btn i{font-style:normal; font-size:15px; transition:transform .18s ease;}
+  .card.folded .fold-btn i{transform:rotate(-90deg);}
+  .card.folded > *:not(.sec-head):not(.quick-head):not(.trainer-head){display:none;}
+  .card.folded .sec-head,.card.folded .quick-head,.card.folded .trainer-head{margin-bottom:0;}
+  .card.folded .quick-head .chips{display:none;}  /* 접힌 상태에서 정렬 칩은 무의미 (트레이너 스위치는 유지) */
+
   /* ---- BPM ---- */
   .bpm-wrap{text-align:center;}
   .bpm-num{
@@ -202,20 +217,24 @@
   <input type="range" id="bpm-range" min="20" max="500" step="1" value="120" aria-label="BPM">
 </section>
 
-<section class="card">
+<section class="card" data-sec="quick">
   <div class="quick-head">
     <h2 data-i18n="quickBpm">QUICK BPM</h2>
     <div class="chips">
       <button type="button" class="chip" id="quick-asc" data-i18n="quickAsc">Ascending</button>
       <button type="button" class="chip" id="quick-desc" data-i18n="quickDesc">Descending</button>
     </div>
+    <button type="button" class="fold-btn" aria-expanded="true"><i>▾</i></button>
   </div>
   <div class="chips" id="quick-list"></div>
   <p class="hint" data-i18n="quickHint">+ saves the current BPM as a button · × removes it · drag to reorder</p>
 </section>
 
-<section class="card">
-  <h2 data-i18n="rhythm">RHYTHM</h2>
+<section class="card" data-sec="rhythm">
+  <div class="sec-head">
+    <h2 data-i18n="rhythm">RHYTHM</h2>
+    <button type="button" class="fold-btn" aria-expanded="true"><i>▾</i></button>
+  </div>
   <div class="dots" id="dots"></div>
   <div class="rhythm-rows">
     <div class="row">
@@ -234,10 +253,11 @@
   <p class="hint" data-i18n="hint">Tap a circle to set each beat's accent (accent · normal · mute)</p>
 </section>
 
-<section class="card" id="trainer-card">
+<section class="card" id="trainer-card" data-sec="trainer">
   <div class="trainer-head">
     <h2 data-i18n="trainer">TEMPO TRAINER</h2>
     <span class="switch"><input type="checkbox" id="tr-on"><i></i></span>
+    <button type="button" class="fold-btn" aria-expanded="true"><i>▾</i></button>
   </div>
   <div class="trainer-body">
     <div class="trainer-fields">
@@ -249,8 +269,11 @@
   </div>
 </section>
 
-<section class="card">
-  <h2 data-i18n="presets">PRESETS</h2>
+<section class="card" data-sec="presets">
+  <div class="sec-head">
+    <h2 data-i18n="presets">PRESETS</h2>
+    <button type="button" class="fold-btn" aria-expanded="true"><i>▾</i></button>
+  </div>
   <div class="preset-form">
     <input type="text" id="preset-name" data-i18n-ph="presetPh" placeholder="Name (e.g. song title)" maxlength="40">
     <button type="button" class="btn" id="preset-save" data-i18n="save">Save</button>
@@ -258,7 +281,11 @@
   <div class="preset-list" id="preset-list"></div>
 </section>
 
-<section class="card">
+<section class="card" data-sec="settings">
+  <div class="sec-head">
+    <h2 data-i18n="settings">SETTINGS</h2>
+    <button type="button" class="fold-btn" aria-expanded="true"><i>▾</i></button>
+  </div>
   <div class="foot-row">
     <span class="foot-label" data-i18n="volume">Volume</span>
     <input type="range" id="vol" min="0" max="100" step="1" value="80" aria-label="Volume">
@@ -300,7 +327,7 @@
 <script id="app">
 'use strict';
 /* 배포할 때마다 이 버전만 올리면 됨 — 헤더에 표시되고 sw.js 캐시 버전으로도 전달된다 */
-const APP_VER='v15';
+const APP_VER='v16';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const BPM_MIN=20, BPM_MAX=500;
@@ -364,6 +391,7 @@ const I18N={
     trainer:'템포 트레이너', tr1:'매', tr2:'마디마다', tr3:'BPM씩 → 목표', tr4:'BPM',
     presets:'프리셋', presetPh:'이름 (예: 곡 제목)', save:'저장',
     volume:'음량', awake:'재생 중 화면 꺼짐 방지', language:'언어',
+    settings:'설정', fold:'섹션 접기/펼치기',
     avSync:'화면 싱크',
     avHint:a=>'자동 보정 '+a+'ms에 더하는 미세조정 · 점이 소리보다 빠르면 +, 늦으면 − 쪽으로',
     note:'재생 중에는 다른 앱으로 전환해도 소리가 유지돼요. 미디어 알림에서 재생/정지를 제어할 수 있어요.',
@@ -388,6 +416,7 @@ const I18N={
     trainer:'TEMPO TRAINER', tr1:'Every', tr2:'bars, step', tr3:'BPM → target', tr4:'BPM',
     presets:'PRESETS', presetPh:'Name (e.g. song title)', save:'Save',
     volume:'Volume', awake:'Keep screen on while playing', language:'Language',
+    settings:'SETTINGS', fold:'Collapse or expand section',
     avSync:'Visual sync',
     avHint:a=>'Fine trim on top of auto '+a+'ms · dot before the click? go +, after? go −',
     note:'Audio keeps playing when you switch to another app. Use the media notification to play or pause.',
@@ -416,7 +445,7 @@ catch(e){const m=new Map();return{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v
 /* ---------- 상태 ---------- */
 const state={
   bpm:120, beats:4, subdiv:'1', accents:[2,1,1,1],
-  volume:.8, keepAwake:true, playing:false, quickBpms:[], avOffsetMs:0,
+  volume:.8, keepAwake:true, playing:false, quickBpms:[], avOffsetMs:0, folded:{},
   lang:(navigator.language||'en').toLowerCase().startsWith('ko')?'ko':'en',
   trainer:{on:false, every:4, step:5, target:160}
 };
@@ -434,7 +463,7 @@ function sanitizeQuick(arr){
 let saveT=null;
 function persist(){clearTimeout(saveT);saveT=setTimeout(()=>{try{store.setItem('dm.settings',JSON.stringify({
   bpm:state.bpm,beats:state.beats,subdiv:state.subdiv,accents:state.accents,
-  volume:state.volume,keepAwake:state.keepAwake,lang:state.lang,quickBpms:state.quickBpms,trainer:state.trainer,avOffsetMs:state.avOffsetMs}));}catch(e){}},250);}
+  volume:state.volume,keepAwake:state.keepAwake,lang:state.lang,quickBpms:state.quickBpms,trainer:state.trainer,avOffsetMs:state.avOffsetMs,folded:state.folded}));}catch(e){}},250);}
 
 function restore(){
   try{
@@ -449,6 +478,9 @@ function restore(){
       if(s.lang==='ko'||s.lang==='en')state.lang=s.lang;
       state.quickBpms=sanitizeQuick(s.quickBpms);
       state.avOffsetMs=Number.isFinite(+s.avOffsetMs)?clamp(Math.round(+s.avOffsetMs),-100,300):0;
+      state.folded={};
+      if(s.folded&&typeof s.folded==='object')
+        ['quick','rhythm','trainer','presets','settings'].forEach(k=>{if(s.folded[k])state.folded[k]=true;});
       if(s.trainer)state.trainer={on:!!s.trainer.on,
         every:clamp(Math.round(+s.trainer.every)||4,1,64),
         step:clamp(Math.round(+s.trainer.step)||5,1,50),
@@ -719,6 +751,16 @@ function renderAvSync(){
   $('#av-offset').setAttribute('aria-valuetext',txt);
   avAutoShown=-1;syncAvHint();
 }
+
+/* ---------- 카드 접기 ---------- */
+function renderFold(){
+  $$('.card[data-sec]').forEach(c=>{
+    const f=!!state.folded[c.dataset.sec];
+    c.classList.toggle('folded',f);
+    const b=c.querySelector('.fold-btn');
+    if(b)b.setAttribute('aria-expanded',String(!f));
+  });
+}
 function clearBeatVis(){
   $$('#dots .dot').forEach(d=>d.classList.remove('on','pulse'));
   $('#bar-num').textContent='–';
@@ -900,6 +942,7 @@ function applyLang(){
   $$('.chip[data-lang]').forEach(ch=>ch.classList.toggle('sel',ch.dataset.lang===state.lang));
   $('#vol').setAttribute('aria-label',T().volume);
   $('#av-offset').setAttribute('aria-label',T().avSync);
+  $$('.fold-btn').forEach(b=>b.setAttribute('aria-label',T().fold));
   renderPlay();renderDots();renderPresets();renderQuick();renderTrainerInfo();renderAvSync();updateMeta();
 }
 function setLang(l){state.lang=l;applyLang();persist();}
@@ -997,6 +1040,11 @@ $('#av-offset').addEventListener('input',e=>{
   state.avOffsetMs=clamp(Math.round(+e.target.value)||0,-100,300);  /* 상한 300: 모바일 BT는 자동 보정이 안 잡혀 수동으로 150~300ms를 덮어야 함 */
   persist();renderAvSync();
 });
+$$('.fold-btn').forEach(b=>b.addEventListener('click',()=>{
+  const k=b.closest('.card').dataset.sec;
+  state.folded[k]=!state.folded[k];
+  persist();renderFold();
+}));
 $('#play').addEventListener('click',()=>togglePlay());
 $('#awake').addEventListener('change',e=>{
   state.keepAwake=e.target.checked;persist();
@@ -1064,7 +1112,7 @@ $('#vol').value=Math.round(state.volume*100);
 $('#av-offset').value=state.avOffsetMs;
 $('#awake').checked=state.keepAwake;
 $('#app-ver').textContent=APP_VER;
-renderDots();renderSubdiv();renderQuick();syncTrainerUI();renderPresets();renderPlay();applyLang();
+renderDots();renderSubdiv();renderQuick();syncTrainerUI();renderPresets();renderPlay();renderFold();applyLang();
 requestAnimationFrame(frame);
 
 /* 테스트/디버그 훅 */
