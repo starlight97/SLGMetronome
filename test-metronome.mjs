@@ -114,6 +114,12 @@ check('퀵 BPM 추가/적용/삭제', nQuick === 1 && qSet === qBpm && nQuick2 =
   `chips=${nQuick}→${nQuick2} bpm=${qSet} (기대 ${qBpm})`);
 
 // --- 9. 퀵 BPM 드래그 순서 변경 (200,195 → 195,200) ---
+// 탭 템포 결과에는 ±1 BPM 지터가 있으므로 이후 체크의 기준 BPM을 정확히 200으로 고정
+await page.evaluate(() => {
+  const r = document.querySelector('#bpm-range');
+  r.value = '200';
+  r.dispatchEvent(new Event('input', { bubbles: true }));
+});
 await page.click('.quick-add');                       // 200 추가
 await page.click('#bpm-m5');                          // bpm 195
 await page.click('.quick-add');                       // 195 추가 → [200,195]
@@ -169,6 +175,30 @@ await page.waitForTimeout(4200);
 dbg = await page.evaluate(() => ({ bpm: window.__dm.state.bpm }));
 check('템포 트레이너 목표 도달', dbg.bpm === 170, `bpm=${dbg.bpm}`);
 await page.click('#play');
+
+// --- 12b. 화면 싱크 보정 (슬라이더 → 상태/보정값 반영, 재로드 후 복원) ---
+dbg = await page.evaluate(() => {
+  const s = document.querySelector('#av-offset');
+  const set = v => { s.value = String(v); s.dispatchEvent(new Event('input', { bubbles: true })); };
+  set(0); const c0 = window.__dm.avComp;
+  set(40); const c40 = window.__dm.avComp;   // 40으로 남겨 재로드 복원까지 검증
+  return {
+    delta: c40 - c0,
+    off: window.__dm.state.avOffsetMs,
+    val: document.querySelector('#av-val').textContent
+  };
+});
+const compOk = Math.abs(dbg.delta - 0.04) < 0.005;  // 오프셋 항이 avComp에 실제로 반영되는지 (outputLatency와 무관하게)
+await page.waitForTimeout(400);                  // persist 디바운스(250ms) 대기
+await page.reload();
+await page.waitForTimeout(400);
+const dbg2 = await page.evaluate(() => ({
+  off: window.__dm.state.avOffsetMs,
+  slider: document.querySelector('#av-offset').value
+}));
+check('화면 싱크 보정 슬라이더', dbg.off === 40 && compOk && dbg.val === '+40ms'
+  && dbg2.off === 40 && dbg2.slider === '40',
+  `off=${dbg.off} compDelta=${dbg.delta} val=${dbg.val} reload=[${dbg2.off},${dbg2.slider}]`);
 
 // --- 13. 콘솔 에러 ---
 const realErrors = errors.filter(e => !/autoplay|AudioContext was not allowed/i.test(e));

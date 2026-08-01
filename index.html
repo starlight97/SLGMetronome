@@ -159,6 +159,9 @@
   .foot-row{display:flex; align-items:center; gap:12px;}
   .foot-row + .foot-row{margin-top:12px;}
   .foot-label{font-size:13.5px; color:var(--dim); flex:none; min-width:64px;}
+  #av-offset{flex:1; min-width:0;}
+  .av-val{flex:none; min-width:52px; text-align:right; font-size:13.5px; color:var(--amber2);}
+  #av-hint{margin-bottom:12px;}  /* <p>가 .foot-row 사이에 끼므로 인접 형제 간격 규칙을 대신 채운다 */
   .awake-row label{display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--dim); cursor:pointer;}
   .note{font-size:12px; color:var(--dim2); margin:12px 2px 0; line-height:1.5;}
   .kbd-hint{display:none; font-size:12px; color:var(--dim2); text-align:center; margin:14px 0 0;}
@@ -260,6 +263,12 @@
     <span class="foot-label" data-i18n="volume">Volume</span>
     <input type="range" id="vol" min="0" max="100" step="1" value="80" aria-label="Volume">
   </div>
+  <div class="foot-row">
+    <span class="foot-label" data-i18n="avSync">Visual sync</span>
+    <input type="range" id="av-offset" min="-100" max="300" step="5" value="0" aria-label="Visual sync" aria-describedby="av-hint">
+    <b class="av-val" id="av-val">0</b>
+  </div>
+  <p class="hint" id="av-hint"></p>
   <div class="foot-row awake-row">
     <label><span class="switch"><input type="checkbox" id="awake" checked><i></i></span> <span data-i18n="awake">Keep screen on while playing</span></label>
   </div>
@@ -291,7 +300,7 @@
 <script id="app">
 'use strict';
 /* 배포할 때마다 이 버전만 올리면 됨 — 헤더에 표시되고 sw.js 캐시 버전으로도 전달된다 */
-const APP_VER='v12';
+const APP_VER='v13';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const BPM_MIN=20, BPM_MAX=500;
@@ -355,6 +364,8 @@ const I18N={
     trainer:'템포 트레이너', tr1:'매', tr2:'마디마다', tr3:'BPM씩 → 목표', tr4:'BPM',
     presets:'프리셋', presetPh:'이름 (예: 곡 제목)', save:'저장',
     volume:'음량', awake:'재생 중 화면 꺼짐 방지', language:'언어',
+    avSync:'화면 싱크',
+    avHint:a=>'자동 보정 '+a+'ms에 더하는 미세조정 · 점이 소리보다 빠르면 +, 늦으면 − 쪽으로',
     note:'재생 중에는 다른 앱으로 전환해도 소리가 유지돼요. 미디어 알림에서 재생/정지를 제어할 수 있어요.',
     kbd:'Space 시작/정지 · ↑↓ ±1 BPM · ←→ ±5 BPM · T 탭 템포',
     start:'시작', stop:'정지', trainerTag:'트레이너', noPresets:'저장된 프리셋이 없어요',
@@ -377,6 +388,8 @@ const I18N={
     trainer:'TEMPO TRAINER', tr1:'Every', tr2:'bars, step', tr3:'BPM → target', tr4:'BPM',
     presets:'PRESETS', presetPh:'Name (e.g. song title)', save:'Save',
     volume:'Volume', awake:'Keep screen on while playing', language:'Language',
+    avSync:'Visual sync',
+    avHint:a=>'Fine trim on top of auto '+a+'ms · dot before the click? go +, after? go −',
     note:'Audio keeps playing when you switch to another app. Use the media notification to play or pause.',
     kbd:'Space play/stop · ↑↓ ±1 BPM · ←→ ±5 BPM · T tap tempo',
     start:'Start', stop:'Stop', trainerTag:'Trainer', noPresets:'No saved presets',
@@ -403,7 +416,7 @@ catch(e){const m=new Map();return{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v
 /* ---------- 상태 ---------- */
 const state={
   bpm:120, beats:4, subdiv:'1', accents:[2,1,1,1],
-  volume:.8, keepAwake:true, playing:false, quickBpms:[],
+  volume:.8, keepAwake:true, playing:false, quickBpms:[], avOffsetMs:0,
   lang:(navigator.language||'en').toLowerCase().startsWith('ko')?'ko':'en',
   trainer:{on:false, every:4, step:5, target:160}
 };
@@ -421,7 +434,7 @@ function sanitizeQuick(arr){
 let saveT=null;
 function persist(){clearTimeout(saveT);saveT=setTimeout(()=>{try{store.setItem('dm.settings',JSON.stringify({
   bpm:state.bpm,beats:state.beats,subdiv:state.subdiv,accents:state.accents,
-  volume:state.volume,keepAwake:state.keepAwake,lang:state.lang,quickBpms:state.quickBpms,trainer:state.trainer}));}catch(e){}},250);}
+  volume:state.volume,keepAwake:state.keepAwake,lang:state.lang,quickBpms:state.quickBpms,trainer:state.trainer,avOffsetMs:state.avOffsetMs}));}catch(e){}},250);}
 
 function restore(){
   try{
@@ -435,6 +448,7 @@ function restore(){
       state.keepAwake=s.keepAwake!==false;
       if(s.lang==='ko'||s.lang==='en')state.lang=s.lang;
       state.quickBpms=sanitizeQuick(s.quickBpms);
+      state.avOffsetMs=Number.isFinite(+s.avOffsetMs)?clamp(Math.round(+s.avOffsetMs),-100,300):0;
       if(s.trainer)state.trainer={on:!!s.trainer.on,
         every:clamp(Math.round(+s.trainer.every)||4,1,64),
         step:clamp(Math.round(+s.trainer.step)||5,1,50),
@@ -658,11 +672,15 @@ document.addEventListener('visibilitychange',()=>{
 });
 
 /* ---------- 비주얼 ---------- */
+/* 소리는 예약시각 t보다 출력 지연만큼 늦게 귀에 닿으므로 펄스 발화를 그만큼 늦춰 귀 기준으로 맞춘다.
+   outputLatency는 매 프레임 실값 조회(출력 기기 전환 시 자동 반영), avOffsetMs는 기기별 수동 미세조정. */
+function avComp(){return (ctx&&ctx.outputLatency||0)+state.avOffsetMs/1000;}
 function frame(){
   if(state.playing&&ctx){
-    const now=ctx.currentTime;
-    let ev=null;
-    while(queue.length&&queue[0].t<=now)ev=queue.shift();
+    const now=ctx.currentTime-avComp();
+    let ev=null,evBeat=null;
+    while(queue.length&&queue[0].t<=now){ev=queue.shift();if(ev.sub===0)evBeat=ev;}
+    if(evBeat&&evBeat!==ev)renderTick(evBeat);  /* 프레임 스톨로 비트+서브 이벤트가 같이 밀려와도 비트 펄스는 건너뛰지 않도록 */
     if(ev)renderTick(ev);
   }
   requestAnimationFrame(frame);
@@ -675,7 +693,23 @@ function renderTick(ev){
     const d=dots[ev.beat];
     if(d){d.classList.remove('pulse');void d.offsetWidth;d.classList.add('pulse');}
     if(state.trainer.on)renderTrainerInfo();
+    syncAvHint();  /* outputLatency는 재생 시작 후에야 실값이 잡힌다 — 박마다 변화 확인(같으면 no-op) */
   }
+}
+
+/* ---------- 화면 싱크 보정 UI ---------- */
+let avAutoShown=-1;
+function syncAvHint(){
+  const a=Math.round((ctx&&ctx.outputLatency||0)*1000);
+  if(a===avAutoShown)return;
+  avAutoShown=a;
+  $('#av-hint').textContent=T().avHint(a);
+}
+function renderAvSync(){
+  const v=state.avOffsetMs, txt=(v>0?'+':'')+v+'ms';
+  $('#av-val').textContent=txt;
+  $('#av-offset').setAttribute('aria-valuetext',txt);
+  avAutoShown=-1;syncAvHint();
 }
 function clearBeatVis(){
   $$('#dots .dot').forEach(d=>d.classList.remove('on','pulse'));
@@ -857,7 +891,8 @@ function applyLang(){
   $$('#subdiv .chip').forEach(ch=>{ch.title=T().subdivs[ch.dataset.v];ch.setAttribute('aria-label',T().subdivs[ch.dataset.v]);});
   $$('.chip[data-lang]').forEach(ch=>ch.classList.toggle('sel',ch.dataset.lang===state.lang));
   $('#vol').setAttribute('aria-label',T().volume);
-  renderPlay();renderDots();renderPresets();renderQuick();renderTrainerInfo();updateMeta();
+  $('#av-offset').setAttribute('aria-label',T().avSync);
+  renderPlay();renderDots();renderPresets();renderQuick();renderTrainerInfo();renderAvSync();updateMeta();
 }
 function setLang(l){state.lang=l;applyLang();persist();}
 
@@ -950,6 +985,10 @@ holdable($('#beats-plus'),()=>setBeats(state.beats+1));
 $('#tap').addEventListener('click',doTap);
 $('#bpm-range').addEventListener('input',e=>setBpm(+e.target.value));
 $('#vol').addEventListener('input',e=>setVolume(e.target.value/100));
+$('#av-offset').addEventListener('input',e=>{
+  state.avOffsetMs=clamp(Math.round(+e.target.value)||0,-100,300);  /* 상한 300: 모바일 BT는 자동 보정이 안 잡혀 수동으로 150~300ms를 덮어야 함 */
+  persist();renderAvSync();
+});
 $('#play').addEventListener('click',()=>togglePlay());
 $('#awake').addEventListener('change',e=>{
   state.keepAwake=e.target.checked;persist();
@@ -1014,6 +1053,7 @@ $('#bpm-num').textContent=state.bpm;
 $('#bpm-range').value=state.bpm;
 $('#beats-num').textContent=state.beats;
 $('#vol').value=Math.round(state.volume*100);
+$('#av-offset').value=state.avOffsetMs;
 $('#awake').checked=state.keepAwake;
 $('#app-ver').textContent=APP_VER;
 renderDots();renderSubdiv();renderQuick();syncTrainerUI();renderPresets();renderPlay();applyLang();
@@ -1025,6 +1065,7 @@ window.__dm={
   get times(){return dbgTimes.slice();},
   get routed(){return routed;},
   get barsSince(){return barsSince;},
+  get avComp(){return avComp();},
   ctxTime:()=>ctx?ctx.currentTime:0
 };
 </script>
