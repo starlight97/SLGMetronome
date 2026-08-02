@@ -182,6 +182,7 @@
   .av-val{flex:none; min-width:52px; text-align:right; font-size:13.5px; color:var(--amber2);}
   #av-hint{margin-bottom:12px;}  /* <p>가 .foot-row 사이에 끼므로 인접 형제 간격 규칙을 대신 채운다 */
   .awake-row label{display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--dim); cursor:pointer;}
+  .diag-sel{flex:1; background:var(--card2); border:1px solid var(--line); color:var(--txt); border-radius:10px; padding:9px 8px; font-size:14px; min-width:0;}
   .note{font-size:12px; color:var(--dim2); margin:12px 2px 0; line-height:1.5;}
   .kbd-hint{display:none; font-size:12px; color:var(--dim2); text-align:center; margin:14px 0 0;}
   @media (hover:hover) and (pointer:fine){ .kbd-hint{display:block;} }
@@ -321,6 +322,18 @@
       <button type="button" class="chip" data-lang="en">English</button>
     </div>
   </div>
+  <div class="foot-row">
+    <span class="foot-label" data-i18n="diag">Diagnostics</span>
+    <select id="diag-sel" class="diag-sel">
+      <option value="">Off</option>
+      <option value="media">media (baseline)</option>
+      <option value="direct">direct</option>
+      <option value="prime">prime</option>
+      <option value="wait">wait</option>
+      <option value="sr44100">media 44.1kHz</option>
+      <option value="sr48000">media 48kHz</option>
+    </select>
+  </div>
   <p class="note" data-i18n="note">Audio keeps playing when you switch to another app. Use the media notification to play or pause.</p>
   <p class="kbd-hint" data-i18n="kbd">Space play/stop · ↑↓ ±1 BPM · ←→ ±5 BPM · T tap tempo</p>
 </section>
@@ -342,7 +355,7 @@
 <script id="app">
 'use strict';
 /* 배포할 때마다 이 버전만 올리면 됨 — 헤더에 표시되고 sw.js 캐시 버전으로도 전달된다 */
-const APP_VER='v17';
+const APP_VER='v20';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const BPM_MIN=20, BPM_MAX=500;
@@ -405,7 +418,7 @@ const I18N={
     hint:'동그라미를 누르면 박마다 강세를 바꿀 수 있어요 (강 · 중 · 무음)',
     trainer:'템포 트레이너', tr1:'매', tr2:'마디마다', tr3:'BPM씩 → 목표', tr4:'BPM',
     presets:'프리셋', presetPh:'이름 (예: 곡 제목)', save:'저장',
-    volume:'음량', awake:'재생 중 화면 꺼짐 방지', language:'언어',
+    volume:'음량', awake:'재생 중 화면 꺼짐 방지', language:'언어', diag:'진단',
     settings:'설정', fold:'섹션 접기/펼치기',
     avSync:'화면 싱크',
     avHint:a=>'자동 보정 '+a+'ms에 더하는 미세조정 · 점이 소리보다 빠르면 +, 늦으면 − 쪽으로',
@@ -430,7 +443,7 @@ const I18N={
     hint:"Tap a circle to set each beat's accent (accent · normal · mute)",
     trainer:'TEMPO TRAINER', tr1:'Every', tr2:'bars, step', tr3:'BPM → target', tr4:'BPM',
     presets:'PRESETS', presetPh:'Name (e.g. song title)', save:'Save',
-    volume:'Volume', awake:'Keep screen on while playing', language:'Language',
+    volume:'Volume', awake:'Keep screen on while playing', language:'Language', diag:'Diagnostics',
     settings:'SETTINGS', fold:'Collapse or expand section',
     avSync:'Visual sync',
     avHint:a=>'Fine trim on top of auto '+a+'ms · dot before the click? go +, after? go −',
@@ -456,6 +469,19 @@ const T=()=>I18N[state.lang]||I18N.en;
 /* ---------- 저장소 (localStorage 불가 환경에서는 메모리로 폴백) ---------- */
 const store=(()=>{try{const k='__dm_t';localStorage.setItem(k,'1');localStorage.removeItem(k);return localStorage;}
 catch(e){const m=new Map();return{getItem:k=>m.has(k)?m.get(k):null,setItem:(k,v)=>{m.set(k,String(v));},removeItem:k=>{m.delete(k);}};}})();
+
+/* [임시 진단] iPad 첫 재생 연타음 원인 이등분용. 설정 카드의 진단 콤보(저장 키 dm.diag)로 선택하거나
+   ?diag=direct|prime|wait, &sr=44100|48000 쿼리로도 활성(쿼리가 우선). 원인 확정 후 전부 제거할 것.
+   (ios-bug-review-handoff.md 5~7장 참고) */
+const DIAG_SEL=(()=>{
+  const q=new URLSearchParams(location.search), d=q.get('diag'), sr=q.get('sr');
+  if(sr==='44100')return 'sr44100';
+  if(sr==='48000')return 'sr48000';
+  if(d)return d;
+  try{return store.getItem('dm.diag')||'';}catch(e){return '';}
+})();
+const DIAG_MODE=(DIAG_SEL==='sr44100'||DIAG_SEL==='sr48000')?'media':DIAG_SEL;
+const DIAG_SR=DIAG_SEL==='sr44100'?44100:(DIAG_SEL==='sr48000'?48000:0);
 
 /* ---------- 상태 ---------- */
 const state={
@@ -527,7 +553,8 @@ function makeClick(freq,dur,bright){
 function initAudio(){
   if(ctx)return;
   const AC=window.AudioContext||window.webkitAudioContext;
-  ctx=new AC({latencyHint:'interactive'});
+  try{ctx=new AC(DIAG_SR?{latencyHint:'interactive',sampleRate:DIAG_SR}:{latencyHint:'interactive'});}
+  catch(e){ctx=new AC({latencyHint:'interactive'});}  /* [임시 진단] &sr= 쿼리 실패 시 기본값 폴백 */
   master=ctx.createGain();
   master.gain.value=state.volume;
   /* 짧은 클릭은 피크 대비 체감 음량이 낮다 — 부스트(+6dB) 후 리미터로 피크만 눌러 왜곡 없이 키운다.
@@ -542,12 +569,21 @@ function initAudio(){
   buffers.beat=makeClick(1175,.07,true);
   buffers.sub=makeClick(880,.05,false);
   audioEl=$('#audio-out');
-  try{
-    msDest=ctx.createMediaStreamDestination();
-    master.connect(msDest);
-    audioEl.srcObject=msDest.stream;
-  }catch(e){msDest=null;}
-  if(!msDest){master.connect(ctx.destination);routed='direct';}
+  if(DIAG_MODE==='direct'){  /* [임시 진단] 라우팅 이등분: media 경로를 건너뛰고 직결 */
+    master.connect(ctx.destination);routed='direct';
+  }else{
+    try{
+      msDest=ctx.createMediaStreamDestination();
+      master.connect(msDest);
+      audioEl.srcObject=msDest.stream;
+    }catch(e){msDest=null;}
+    if(!msDest){master.connect(ctx.destination);routed='direct';}
+  }
+  if(DIAG_MODE){  /* [임시 진단] 요소/컨텍스트 이벤트 계측 */
+    ['play','playing','waiting','stalled','suspend','pause','emptied'].forEach(n=>
+      audioEl.addEventListener(n,()=>diagEvent('audio-'+n)));
+    try{ctx.addEventListener('statechange',()=>diagEvent('ctx-state',{st:ctx.state}));}catch(e){}
+  }
   if('mediaSession' in navigator){
     try{
       navigator.mediaSession.setActionHandler('play',()=>{if(!state.playing)togglePlay();});
@@ -591,6 +627,123 @@ async function waitForSteadyClock(){
   }
 }
 
+/* ---------- [임시 진단] ?diag= 쿼리에서만 동작. 평상시엔 전부 no-op ---------- */
+const audioDiag={scheduled:0,resyncs:0,rows:[],timer:null,done:false};
+function diagEvent(type,extra){
+  if(!DIAG_MODE||audioDiag.done)return;  /* 진단 종료 후엔 요약 화면을 덮어쓰지 않음 */
+  audioDiag.rows.push('['+Math.round(performance.now())+'] '+type+(extra?' '+JSON.stringify(extra):''));
+  if(audioDiag.rows.length>400)audioDiag.rows.shift();
+  const pre=document.getElementById('audio-diag');
+  if(pre)pre.textContent=audioDiag.rows.slice(-30).join('\n');
+}
+/* 진단 리포트 전문 — Copy/Share 버튼과 __dm.diagReport()가 사용 */
+function diagReport(){
+  const rates=audioDiag.rows.map(r=>{const m=/"rate":(-?[\d.]+)/.exec(r);return m?+m[1]:null;}).filter(v=>v!=null);
+  let standalone=false;try{standalone=navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;}catch(e){}
+  return [
+    '=== SLGMetronome diag report ===',
+    'ver='+APP_VER+' mode='+(DIAG_SEL||'off')+' routed='+routed+' ios='+IS_IOS,
+    'ua='+navigator.userAgent,
+    'platform='+navigator.platform+' touch='+navigator.maxTouchPoints+' standalone='+standalone,
+    'screen='+screen.width+'x'+screen.height+' dpr='+(window.devicePixelRatio||1),
+    ctx?('ctx: sr='+ctx.sampleRate+' state='+ctx.state+' bLat='+(ctx.baseLatency!=null?ctx.baseLatency:'-')+' oLat='+(ctx.outputLatency!=null?ctx.outputLatency:'-')):'ctx: (none)',
+    'summary: rate min='+(rates.length?Math.min(...rates).toFixed(3):'-')+' max='+(rates.length?Math.max(...rates).toFixed(3):'-')+' sched='+audioDiag.scheduled+' resync='+audioDiag.resyncs,
+    'app: bpm='+state.bpm+' beats='+state.beats+' subdiv='+state.subdiv+' | '+new Date().toISOString(),
+    '--- log ('+audioDiag.rows.length+' rows) ---'
+  ].concat(audioDiag.rows).join('\n');
+}
+function diagCopyFallback(text){
+  try{
+    const ta=document.createElement('textarea');ta.value=text;
+    ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.focus();ta.select();
+    const ok=document.execCommand('copy');ta.remove();return ok;
+  }catch(e){return false;}
+}
+function startDiagOverlay(){
+  if(!DIAG_MODE||audioDiag.timer)return;
+  let pre=document.getElementById('audio-diag');
+  if(!pre){
+    pre=document.createElement('pre');pre.id='audio-diag';
+    Object.assign(pre.style,{position:'fixed',left:'4px',right:'4px',top:'4px',bottom:'42%',zIndex:99999,
+      overflow:'auto',pointerEvents:'none',background:'rgba(0,0,0,.85)',color:'#0f0',
+      padding:'8px',margin:0,font:'10px/1.35 monospace',whiteSpace:'pre-wrap',textAlign:'left'});
+    document.body.appendChild(pre);
+    /* 리포트 추출 버튼 — 복사(클립보드) / 공유(iOS 공유 시트로 카톡·메모 전송) */
+    const bar=document.createElement('div');bar.id='audio-diag-btns';
+    Object.assign(bar.style,{position:'fixed',right:'8px',top:'calc(58% + 8px)',zIndex:99999,display:'flex',gap:'8px'});
+    const mkBtn=(label,fn)=>{
+      const b=document.createElement('button');b.type='button';b.textContent=label;
+      Object.assign(b.style,{background:'#1c212a',border:'1px solid #555',color:'#0f0',
+        borderRadius:'10px',padding:'10px 14px',font:'12px monospace',cursor:'pointer'});
+      b.addEventListener('click',async()=>{
+        const old=b.textContent;
+        try{const ok=await fn();b.textContent=ok===false?'failed':'✓ done';}
+        catch(e){b.textContent='failed';}
+        setTimeout(()=>{b.textContent=old;},1500);
+      });
+      bar.appendChild(b);return b;
+    };
+    mkBtn('Copy log',async()=>{
+      const text=diagReport();
+      try{await navigator.clipboard.writeText(text);return true;}
+      catch(e){return diagCopyFallback(text);}
+    });
+    if(navigator.share)mkBtn('Share',async()=>{await navigator.share({title:'SLGMetronome diag',text:diagReport()});return true;});
+    document.body.appendChild(bar);
+  }
+  diagEvent('diag-start',{mode:DIAG_MODE,sr:DIAG_SR||'default',ios:IS_IOS,ver:APP_VER});
+  let lastW=performance.now(),lastC=ctx.currentTime;
+  audioDiag.timer=setInterval(()=>{
+    const w=performance.now(),c=ctx.currentTime;
+    const rate=(c-lastC)/((w-lastW)/1000);
+    let ots=null;try{ots=ctx.getOutputTimestamp?ctx.getOutputTimestamp():null;}catch(e){}
+    const tr=msDest?msDest.stream.getAudioTracks()[0]:null;
+    diagEvent('smp',{
+      rate:+rate.toFixed(3),ct:+c.toFixed(3),st:ctx.state,sr:ctx.sampleRate,
+      aud:audioEl?+audioEl.currentTime.toFixed(3):null,
+      paused:audioEl?audioEl.paused:null,rs:audioEl?audioEl.readyState:null,
+      outCt:ots&&ots.contextTime!=null?+ots.contextTime.toFixed(3):null,
+      trk:tr?tr.readyState+(tr.muted?'/muted':''):null,
+      bLat:ctx.baseLatency!=null?+ctx.baseLatency.toFixed(3):null,
+      oLat:ctx.outputLatency!=null?+ctx.outputLatency.toFixed(3):null,
+      sch:audioDiag.scheduled,rsn:audioDiag.resyncs});
+    lastW=w;lastC=c;
+  },100);
+  setTimeout(()=>{  /* 종료 시 요약+처음 3초 로그로 화면 고정 — 연타음 구간이 밀려나가지 않게 */
+    clearInterval(audioDiag.timer);audioDiag.timer=null;audioDiag.done=true;
+    const rates=audioDiag.rows.map(r=>{const m=/"rate":(-?[\d.]+)/.exec(r);return m?+m[1]:null;}).filter(v=>v!=null);
+    const head='== DIAG DONE (이 화면을 촬영) ==\n'
+      +'mode='+DIAG_MODE+(DIAG_SR?' sr='+DIAG_SR:'')
+      +' | rate min='+(rates.length?Math.min(...rates).toFixed(3):'-')
+      +' max='+(rates.length?Math.max(...rates).toFixed(3):'-')
+      +' | sched='+audioDiag.scheduled+' resync='+audioDiag.resyncs+'\n-- first 3s --\n';
+    const pre=document.getElementById('audio-diag');
+    if(pre)pre.textContent=head+audioDiag.rows.slice(0,34).join('\n');
+  },8000);
+}
+/* H6 검증: 완전 무음이 아닌 미세 신호(-66dB)를 msDest에 1.2s 먼저 통과시킨 뒤 클릭 시작 */
+let mediaPathPrimed=false;
+async function primeMediaPath(){
+  if(DIAG_MODE!=='prime'||mediaPathPrimed||routed!=='media'||!msDest)return;
+  mediaPathPrimed=true;
+  const osc=ctx.createOscillator(),gn=ctx.createGain();
+  osc.frequency.value=997;gn.gain.value=.0005;
+  osc.connect(gn);gn.connect(msDest);
+  const start=ctx.currentTime+.02;
+  const ended=new Promise(r=>osc.addEventListener('ended',r,{once:true}));
+  osc.start(start);osc.stop(start+1.2);
+  await Promise.race([ended,new Promise(r=>setTimeout(r,1800))]);
+  diagEvent('media-prime-ended');
+}
+/* 대조군: prime과 같은 시간을 신호 없이 대기 — prime 성공이 '신호' 덕인지 '추가 대기' 덕인지 판별 */
+async function waitControl(){
+  if(DIAG_MODE!=='wait')return;
+  await new Promise(r=>setTimeout(r,1250));
+  diagEvent('wait-ended');
+}
+/* ---------- [임시 진단] 끝 ---------- */
+
 function updateMeta(){
   if(!('mediaSession' in navigator))return;
   try{
@@ -626,6 +779,7 @@ function schedulerTick(){
   if(nextTime<now-.12){  /* 탭 동결 후 복귀 시 재동기화(연타 방지) */
     const w=performance.now(), burst=w-lastResync<400;
     lastResync=w;
+    audioDiag.resyncs++;
     nextTime=now+.05;
     if(burst)return;  /* 가드가 연속 발동 = 클록이 실시간보다 빨리 질주 중(iOS) — 예약 생략해 연타 봉쇄 */
   }
@@ -633,6 +787,8 @@ function schedulerTick(){
 }
 
 function scheduleNote(t){
+  audioDiag.scheduled++;
+  diagEvent('sched',{t:+t.toFixed(3),lead:+(t-ctx.currentTime).toFixed(3)});
   const pat=PATTERNS[state.subdiv]||PATTERNS['1'];
   let buf=null,g=1;
   if(pos.sub===0){
@@ -691,6 +847,10 @@ async function togglePlay(force){
     initAudio();
     state.playing=true;
     await ensureRoute();
+    diagEvent('route-ready',{routed,paused:audioEl?audioEl.paused:null,rs:audioEl?audioEl.readyState:null});
+    startDiagOverlay();
+    await primeMediaPath();
+    await waitControl();
     if(!warmedUp){await waitForClock();await waitForSteadyClock();}
     if(!state.playing)return;  /* 예열 대기 중 정지를 눌렀으면 시작하지 않음 */
     pos={bar:0,beat:0,sub:0};barsSince=0;queue.length=0;
@@ -1118,6 +1278,16 @@ PATTERN_ORDER.forEach(id=>{
   sd.appendChild(b);
 });
 $$('.chip[data-lang]').forEach(b=>b.addEventListener('click',()=>setLang(b.dataset.lang)));
+/* [임시 진단] 콤보 선택 → 저장 후 쿼리 없는 주소로 리로드 (라우팅/컨텍스트는 로드 시 구성되므로) */
+{
+  const dsel=$('#diag-sel');
+  dsel.value=DIAG_SEL;
+  if(dsel.value!==DIAG_SEL)dsel.value='';  /* 알 수 없는 쿼리 값이면 Off 표시 */
+  dsel.addEventListener('change',()=>{
+    try{store.setItem('dm.diag',dsel.value);}catch(e){}
+    location.replace(location.pathname);
+  });
+}
 
 document.addEventListener('keydown',e=>{
   if(e.target&&/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))return;
@@ -1148,7 +1318,8 @@ window.__dm={
   get routed(){return routed;},
   get barsSince(){return barsSince;},
   get avComp(){return avComp();},
-  ctxTime:()=>ctx?ctx.currentTime:0
+  ctxTime:()=>ctx?ctx.currentTime:0,
+  diagReport:()=>DIAG_MODE?diagReport():''
 };
 </script>
 <script>

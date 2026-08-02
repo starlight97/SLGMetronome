@@ -4,3 +4,4 @@ shot-*.png
 Thumbs.db
 __pycache__/
 .claude/settings.local.json
+.idea
