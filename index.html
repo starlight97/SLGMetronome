@@ -355,7 +355,7 @@
 <script id="app">
 'use strict';
 /* 배포할 때마다 이 버전만 올리면 됨 — 헤더에 표시되고 sw.js 캐시 버전으로도 전달된다 */
-const APP_VER='v20';
+const APP_VER='v21';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const BPM_MIN=20, BPM_MAX=500;
@@ -665,13 +665,14 @@ function startDiagOverlay(){
   let pre=document.getElementById('audio-diag');
   if(!pre){
     pre=document.createElement('pre');pre.id='audio-diag';
-    Object.assign(pre.style,{position:'fixed',left:'4px',right:'4px',top:'4px',bottom:'42%',zIndex:99999,
+    Object.assign(pre.style,{position:'fixed',left:'4px',right:'4px',top:'46%',
+      bottom:'calc(88px + env(safe-area-inset-bottom))',zIndex:99999,
       overflow:'auto',pointerEvents:'none',background:'rgba(0,0,0,.85)',color:'#0f0',
       padding:'8px',margin:0,font:'10px/1.35 monospace',whiteSpace:'pre-wrap',textAlign:'left'});
     document.body.appendChild(pre);
     /* 리포트 추출 버튼 — 복사(클립보드) / 공유(iOS 공유 시트로 카톡·메모 전송) */
     const bar=document.createElement('div');bar.id='audio-diag-btns';
-    Object.assign(bar.style,{position:'fixed',right:'8px',top:'calc(58% + 8px)',zIndex:99999,display:'flex',gap:'8px'});
+    Object.assign(bar.style,{position:'fixed',right:'8px',top:'calc(46% - 46px)',zIndex:99999,display:'flex',gap:'8px'});
     const mkBtn=(label,fn)=>{
       const b=document.createElement('button');b.type='button';b.textContent=label;
       Object.assign(b.style,{background:'#1c212a',border:'1px solid #555',color:'#0f0',
